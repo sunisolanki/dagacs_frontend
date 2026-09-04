@@ -1,10 +1,15 @@
-import '../services/api_service.dart';
-import '../services/token_service.dart';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 
+import '../core/session/session_controller.dart';
+import '../network/api_exception.dart';
+import '../repositories/auth_repository.dart';
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen(
+      {super.key, required this.authRepository, required this.session});
+
+  final AuthRepository authRepository;
+  final SessionController session;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -15,7 +20,51 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  String _error = '';
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final auth = await widget.authRepository
+          .login(_emailController.text.trim(), _passwordController.text);
+      await widget.authRepository.persistSession(auth);
+      widget.session.establishSession(
+        auth.role ?? 'STUDENT',
+        email: auth.email,
+        fullName: auth.fullName,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/home');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = switch (e.statusCode) {
+          401 => 'Invalid email or password.',
+          -1 => 'Network error. Check your connection and try again.',
+          _ => e.message,
+        };
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Login failed. Please try again.';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.shield, size: 120, color: Colors.white),
+                const Icon(Icons.shield, size: 120, color: Colors.white),
                 const SizedBox(height: 32),
                 const Text(
                   'DAGACS',
@@ -52,11 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'Department Attendance Governance, Analytics and Compliance System',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.normal,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.white70),
                 ),
                 const SizedBox(height: 40),
                 Form(
@@ -66,45 +111,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.send,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: const Icon(Icons.email),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
+                          if (value == null || value.trim().isEmpty) {
                             return 'Email is required';
                           }
                           return null;
                         },
+                        decoration: _inputDecoration(
+                          label: 'Email',
+                          icon: Icons.email,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                        ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Password is required';
                           }
-                          if (value.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
                           return null;
                         },
+                        decoration: _inputDecoration(
+                          label: 'Password',
+                          icon: Icons.lock,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       SizedBox(
@@ -118,38 +149,31 @@ class _LoginScreenState extends State<LoginScreen> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          onPressed: _handleLogin,
+                          onPressed: _isLoading ? null : _handleLogin,
                           child: _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.blue,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(Colors.blue),
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.blue),
                                 )
                               : const Text(
                                   'Sign In',
                                   style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold),
                                 ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (_error.isNotEmpty)
-                        Text(
-                          _error,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 12,
+                      if (_error != null)
+                        Center(
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 12),
                           ),
                         ),
-                      const Text(
-                        'Demo account: admin@example.com / Admin@123',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white54,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -161,45 +185,14 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-        _error = '';
-      });
-      _doLogin();
-    }
-  }
-
-  Future<void> _doLogin() async {
-    try {
-      final response = await ApiService.post('auth/login', body: {
-        'email': _emailController.text.trim(),
-        'password': _passwordController.text,
-      });
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final authToken = json['token'] as String;
-        final role = json['role'] as String? ?? 'STUDENT';
-
-        await TokenService.saveToken(authToken);
-        await TokenService.setRole(role);
-
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, '/');
-      } else {
-        setState(() {
-          _error = 'Invalid credentials';
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Login failed';
-        _isLoading = false;
-      });
-    }
+  InputDecoration _inputDecoration(
+      {required String label, required IconData icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      filled: true,
+      fillColor: Colors.white,
+    );
   }
 }

@@ -1,7 +1,8 @@
-class Navigator {
-  static const String loginRoute = '/login';
-  static const String adminRoute = '/admin';
-  static const String hodRoute = '/hod';
-  static const String teacherRoute = '/teacher';
-  static const String studentRoute = '/student';
+/// Route names used across the app.
+class AppRoutes {
+  AppRoutes._();
+
+  static const String splash = '/splash';
+  static const String login = '/login';
+  static const String home = '/home';
 }

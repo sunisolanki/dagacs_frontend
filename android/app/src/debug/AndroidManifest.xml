@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- DEV ONLY: allow cleartext HTTP to the local backend (http://10.0.2.2:8080
+         on the Android emulator). This applies to the debug build only, so it is
+         never part of release builds. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
