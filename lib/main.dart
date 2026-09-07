@@ -2,12 +2,23 @@ import 'package:flutter/material.dart';
 
 import 'core/session/session_controller.dart';
 import 'network/api_client.dart';
+import 'repositories/attendance_repository.dart';
 import 'repositories/auth_repository.dart';
+import 'repositories/hod_repository.dart';
 import 'repositories/master_data_repository.dart';
+import 'repositories/student_profile_repository.dart';
+import 'repositories/student_management_repository.dart';
+import 'screens/attendance_session_list_screen.dart';
+import 'screens/create_session_screen.dart';
+import 'screens/hod_dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/mark_attendance_screen.dart';
 import 'screens/master_data_screen.dart';
 import 'screens/splash_screen.dart';
+import 'screens/student_attendance_screen.dart';
+import 'screens/student_profile_screen.dart';
+import 'screens/student_management_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -24,6 +35,13 @@ class AppDependencies {
   static final AuthRepository authRepository = AuthRepository(apiClient);
   static final MasterDataRepository masterDataRepository =
       MasterDataRepository(apiClient);
+  static final AttendanceRepository attendanceRepository =
+      AttendanceRepository(apiClient);
+  static final HodRepository hodRepository = HodRepository(apiClient);
+  static final StudentProfileRepository studentProfileRepository =
+      StudentProfileRepository(apiClient);
+  static final StudentManagementRepository studentManagementRepository =
+      StudentManagementRepository(apiClient);
   static final SessionController session =
       SessionController(authRepository);
 }
@@ -69,6 +87,43 @@ class DAGACSApp extends StatelessWidget {
                 builder: (_) => MasterDataScreen(
                     repository: AppDependencies.masterDataRepository,
                     session: AppDependencies.session));
+          case '/teacher/attendance':
+            return MaterialPageRoute(
+                builder: (_) => AttendanceSessionListScreen(
+                    attendanceRepository:
+                        AppDependencies.attendanceRepository));
+          case '/teacher/attendance/create':
+            return MaterialPageRoute(
+                builder: (_) => CreateSessionScreen(
+                    attendanceRepository:
+                        AppDependencies.attendanceRepository));
+          case '/teacher/attendance/mark':
+            final sessionId = settings.arguments as int;
+            return MaterialPageRoute(
+                builder: (_) => MarkAttendanceScreen(
+                    sessionId: sessionId,
+                    attendanceRepository:
+                        AppDependencies.attendanceRepository));
+          case '/student/attendance':
+            return MaterialPageRoute(
+                builder: (_) => StudentAttendanceScreen(
+                    attendanceRepository:
+                        AppDependencies.attendanceRepository));
+          case '/student/profile':
+            return MaterialPageRoute(
+                builder: (_) => StudentProfileScreen(
+                    profileRepository:
+                        AppDependencies.studentProfileRepository));
+          case '/hod/dashboard':
+            return MaterialPageRoute(
+                builder: (_) => HodDashboardScreen(
+                    hodRepository: AppDependencies.hodRepository));
+          case '/admin/students':
+            return MaterialPageRoute(
+                builder: (_) => StudentManagementScreen(
+                    repository: AppDependencies.studentManagementRepository,
+                    masterDataRepository:
+                        AppDependencies.masterDataRepository));
           default:
             return MaterialPageRoute(builder: (_) => const SizedBox());
         }

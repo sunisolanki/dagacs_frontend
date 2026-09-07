@@ -53,6 +53,40 @@ class HomeScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: Colors.grey),
             ),
           const SizedBox(height: 32),
+          if (session.role == 'TEACHER')
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.event_available),
+                title: const Text('Attendance'),
+                subtitle:
+                    const Text('Create sessions and mark student attendance'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/teacher/attendance'),
+              ),
+            ),
+          if (session.role == 'STUDENT')
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.how_to_reg),
+                title: const Text('My Attendance'),
+                subtitle: const Text('View your attendance records'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/student/attendance'),
+              ),
+            ),
+          if (session.role == 'STUDENT')
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('My Profile'),
+                subtitle: const Text('View your academic profile details'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/student/profile'),
+              ),
+            ),
           Card(
             child: ListTile(
               leading: const Icon(Icons.storage),
@@ -63,6 +97,30 @@ class HomeScreen extends StatelessWidget {
               onTap: () => Navigator.pushNamed(context, '/master-data'),
             ),
           ),
+          if (session.role == 'HOD')
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.dashboard_customize),
+                title: const Text('HOD Dashboard'),
+                subtitle: const Text(
+                    'Department analytics: attendance, low attendance, rollups'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/hod/dashboard'),
+              ),
+            ),
+          if (session.role == 'ADMIN')
+            Card(
+              child: ListTile(
+                key: const Key('admin-students-tile'),
+                leading: const Icon(Icons.group),
+                title: const Text('Manage Students'),
+                subtitle: const Text(
+                    'Admin student master - create, edit, activate/deactivate'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/admin/students'),
+              ),
+            ),
         ],
       ),
     );

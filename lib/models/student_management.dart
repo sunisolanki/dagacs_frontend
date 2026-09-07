@@ -1,0 +1,143 @@
+/// Matches the backend M5.2 `StudentManagementDTO` (Jackson `non_null`).
+///
+/// Read/write ADMIN view of the student master. The backend resolves program,
+/// batch and section names; this model is used purely for display in the
+/// ADMIN-only Manage Students screen.
+class StudentManagement {
+  final int? id;
+  final String? rollNumber;
+  final String? email;
+  final String? name;
+  final String? gender;
+  final String? fatherName;
+  final String? motherName;
+  final String? photoUrl;
+  final String? enrollmentNumber;
+  final int? age;
+  final String? admissionDate;
+  final String? status;
+  final int? programId;
+  final String? programName;
+  final int? batchId;
+  final String? batchName;
+  final int? sectionId;
+  final String? sectionName;
+
+  const StudentManagement({
+    this.id,
+    this.rollNumber,
+    this.email,
+    this.name,
+    this.gender,
+    this.fatherName,
+    this.motherName,
+    this.photoUrl,
+    this.enrollmentNumber,
+    this.age,
+    this.admissionDate,
+    this.status,
+    this.programId,
+    this.programName,
+    this.batchId,
+    this.batchName,
+    this.sectionId,
+    this.sectionName,
+  });
+
+  factory StudentManagement.fromJson(Map<String, dynamic> json) {
+    return StudentManagement(
+      id: json['id'] as int?,
+      rollNumber: json['rollNumber'] as String?,
+      email: json['email'] as String?,
+      name: json['name'] as String?,
+      gender: json['gender'] as String?,
+      fatherName: json['fatherName'] as String?,
+      motherName: json['motherName'] as String?,
+      photoUrl: json['photoUrl'] as String?,
+      enrollmentNumber: json['enrollmentNumber'] as String?,
+      age: json['age'] as int?,
+      admissionDate: json['admissionDate'] as String?,
+      status: json['status'] as String?,
+      programId: json['programId'] as int?,
+      programName: json['programName'] as String?,
+      batchId: json['batchId'] as int?,
+      batchName: json['batchName'] as String?,
+      sectionId: json['sectionId'] as int?,
+      sectionName: json['sectionName'] as String?,
+    );
+  }
+
+  bool get isActive => status == 'ACTIVE';
+}
+
+/// Create/update payload for the ADMIN student master API. Matches the backend
+/// `StudentManagementRequestDTO`. No field is sent by the client unless it has a
+/// value (backend defaults status to ACTIVE when absent).
+class StudentManagementRequest {
+  final String? rollNumber;
+  final String? email;
+  final String? name;
+  final String? gender;
+  final String? fatherName;
+  final String? motherName;
+  final String? photoUrl;
+  final String? enrollmentNumber;
+  final int? age;
+  final String? admissionDate;
+  final String? status;
+  final int? programId;
+  final int? batchId;
+  final int? sectionId;
+
+  const StudentManagementRequest({
+    this.rollNumber,
+    this.email,
+    this.name,
+    this.gender,
+    this.fatherName,
+    this.motherName,
+    this.photoUrl,
+    this.enrollmentNumber,
+    this.age,
+    this.admissionDate,
+    this.status,
+    this.programId,
+    this.batchId,
+    this.sectionId,
+  });
+
+  factory StudentManagementRequest.fromStudent(StudentManagement student) =>
+      StudentManagementRequest(
+        rollNumber: student.rollNumber,
+        email: student.email,
+        name: student.name,
+        gender: student.gender,
+        fatherName: student.fatherName,
+        motherName: student.motherName,
+        photoUrl: student.photoUrl,
+        enrollmentNumber: student.enrollmentNumber,
+        age: student.age,
+        admissionDate: student.admissionDate,
+        status: student.status,
+        programId: student.programId,
+        batchId: student.batchId,
+        sectionId: student.sectionId,
+      );
+
+  Map<String, dynamic> toJson() => {
+        if (rollNumber != null) 'rollNumber': rollNumber,
+        if (email != null) 'email': email,
+        if (name != null) 'name': name,
+        if (gender != null) 'gender': gender,
+        if (fatherName != null) 'fatherName': fatherName,
+        if (motherName != null) 'motherName': motherName,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+        if (enrollmentNumber != null) 'enrollmentNumber': enrollmentNumber,
+        if (age != null) 'age': age,
+        if (admissionDate != null) 'admissionDate': admissionDate,
+        if (status != null) 'status': status,
+        if (programId != null) 'programId': programId,
+        if (batchId != null) 'batchId': batchId,
+        if (sectionId != null) 'sectionId': sectionId,
+      };
+}
