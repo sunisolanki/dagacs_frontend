@@ -50,11 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = switch (e.statusCode) {
-          401 => 'Invalid email or password.',
-          -1 => 'Network error. Check your connection and try again.',
-          _ => e.message,
-        };
+        _error = e.statusCode == 401 ? 'Invalid email or password.' : userMessageFor(e);
         _isLoading = false;
       });
     } catch (_) {

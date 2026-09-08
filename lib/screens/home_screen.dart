@@ -23,6 +23,7 @@ class HomeScreen extends StatelessWidget {
         title: const Text('DAGACS'),
         actions: [
           IconButton(
+            tooltip: 'Logout',
             icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
           ),
@@ -63,6 +64,19 @@ class HomeScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () =>
                     Navigator.pushNamed(context, '/teacher/attendance'),
+              ),
+            ),
+          if (session.role == 'TEACHER')
+            Card(
+              child: ListTile(
+                key: const Key('teacher-reports-tile'),
+                leading: const Icon(Icons.assignment),
+                title: const Text('Reports'),
+                subtitle:
+                    const Text('Subject-wise attendance report and export'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    Navigator.pushNamed(context, '/teacher/reports'),
               ),
             ),
           if (session.role == 'STUDENT')
@@ -107,6 +121,18 @@ class HomeScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () =>
                     Navigator.pushNamed(context, '/hod/dashboard'),
+              ),
+            ),
+          if (session.role == 'HOD')
+            Card(
+              child: ListTile(
+                key: const Key('hod-reports-tile'),
+                leading: const Icon(Icons.assessment_outlined),
+                title: const Text('Reports'),
+                subtitle: const Text(
+                    'Daily lecture, coverage, rollups, low attendance and exports'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pushNamed(context, '/hod/reports'),
               ),
             ),
           if (session.role == 'ADMIN')

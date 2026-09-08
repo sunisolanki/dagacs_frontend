@@ -211,14 +211,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   }
 
   String _messageFor(ApiException e) {
-    switch (e.statusCode) {
-      case 401:
-        return 'Session expired. Please sign in again.';
-      case -1:
-        return 'Network error. Check your connection and retry.';
-      default:
-        return e.message;
-    }
+    return userMessageFor(e);
   }
 
   @override

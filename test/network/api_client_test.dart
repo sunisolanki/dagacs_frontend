@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dagacs_frontend/network/api_client.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
@@ -109,6 +110,24 @@ void main() {
       expect(unauthorizedCalled, isTrue);
     });
 
+    test('login 401 with notifyUnauthorized:false throws but does NOT invoke onUnauthorized',
+        () async {
+      var unauthorizedCalled = false;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        onUnauthorized: () => unauthorizedCalled = true,
+        httpClient: _MockClient((req) => http.Response('{}', 401)),
+      );
+      try {
+        await client.post('/auth/login', notifyUnauthorized: false);
+        fail('expected ApiException 401');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+      }
+      expect(unauthorizedCalled, isFalse);
+    });
+
     test('403 throws ApiException.forbidden', () async {
       try {
         await clientReturning(403).get('/x');
@@ -158,6 +177,101 @@ void main() {
       );
       try {
         await client.get('/x');
+        fail('expected ApiException.network');
+      } on ApiException catch (e) {
+        expect(e.statusCode, -1);
+      }
+    });
+  });
+
+  group('ApiClient.getBytes (M7.2 exports)', () {
+    test('attaches Bearer token and preserves binary body + headers', () async {
+      String? seenAuth;
+      String? seenMethod;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'test-jwt',
+        httpClient: _MockClient((req) {
+          seenAuth = req.headers['Authorization'];
+          seenMethod = req.method;
+          return http.Response.bytes(
+            Uint8List.fromList(const [0x25, 0x50, 0x44, 0x46]),
+            200,
+            headers: {
+              'content-disposition':
+                  'attachment; filename="dagacs_hod_daily-lecture_all.pdf"',
+              'content-type': 'application/pdf',
+            },
+          );
+        }),
+      );
+      final response = await client.getBytes('/hod/reports/daily-lecture/export.pdf');
+      expect(seenMethod, 'GET');
+      expect(seenAuth, 'Bearer test-jwt');
+      expect(response.bodyBytes, [0x25, 0x50, 0x44, 0x46]);
+      expect(response.headers['content-disposition'],
+          'attachment; filename="dagacs_hod_daily-lecture_all.pdf"');
+      expect(response.headers['content-type'], 'application/pdf');
+    });
+
+    test('400 with message throws ApiException 400', () async {
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) =>
+            http.Response('{"message":"Unsupported report type"}', 400)),
+      );
+      try {
+        await client.getBytes('/hod/reports/semester/export.xlsx');
+        fail('expected ApiException 400');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 400);
+        expect(e.message, 'Unsupported report type');
+      }
+    });
+
+    test('403 throws ApiException.forbidden', () async {
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient:
+            _MockClient((req) => http.Response('{"message":"Forbidden"}', 403)),
+      );
+      try {
+        await client.getBytes('/hod/reports/daily-lecture/export.xlsx');
+        fail('expected ApiException 403');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 403);
+      }
+    });
+
+    test('401 throws ApiException and invokes onUnauthorized', () async {
+      var unauthorizedCalled = false;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        onUnauthorized: () => unauthorizedCalled = true,
+        httpClient: _MockClient((req) => http.Response('{}', 401)),
+      );
+      try {
+        await client.getBytes('/hod/reports/daily-lecture/export.xlsx');
+        fail('expected ApiException 401');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+      }
+      expect(unauthorizedCalled, isTrue);
+    });
+
+    test('network failure maps to ApiException.network', () async {
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          throw Exception('connection refused');
+        }),
+      );
+      try {
+        await client.getBytes('/hod/reports/daily-lecture/export.xlsx');
         fail('expected ApiException.network');
       } on ApiException catch (e) {
         expect(e.statusCode, -1);

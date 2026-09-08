@@ -461,4 +461,55 @@ void main() {
 
     expect(find.text('No section data yet.'), findsOneWidget);
   });
+
+  testWidgets(
+      'invalid date range (start after end) blocks requests, shows inline '
+      'validation, and reset clears it', (tester) async {
+    final repo = _repo();
+    var dashboardCalls = 0;
+    repo.onGetDashboard = () async {
+      dashboardCalls++;
+      return _dashboard;
+    };
+
+    await tester.binding.setSurfaceSize(const Size(2000, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+    expect(dashboardCalls, 1);
+    expect(find.text('Start date must not be after end date.'), findsNothing);
+
+    // Start = today (date picker OK default).
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(dashboardCalls, 2);
+
+    // End = 15th of the previous month -> start (today) is strictly after end.
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.chevron_left));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    // No dashboard API request was issued for the invalid range.
+    expect(dashboardCalls, 2);
+    expect(find.text('Start date must not be after end date.'), findsOneWidget);
+    // Previously loaded data is preserved.
+    expect(find.text('Computer Engineering'), findsOneWidget);
+
+    // Clearing the dates restores normal fetches and removes the hint.
+    await tester.tap(find.byKey(const Key('clear-dates-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start date must not be after end date.'), findsNothing);
+    expect(dashboardCalls, 3);
+    expect(repo.lastDashboardStart, isNull);
+    expect(repo.lastRollupStart, isNull);
+  });
 }

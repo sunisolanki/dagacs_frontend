@@ -122,7 +122,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Network error'), findsOneWidget);
+      expect(find.textContaining('Unable to connect'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
   });
@@ -193,7 +193,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Network error'), findsOneWidget);
+      expect(find.textContaining('Unable to connect'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
   });

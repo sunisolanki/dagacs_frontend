@@ -75,17 +75,7 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
   }
 
   String _messageFor(ApiException e) {
-    switch (e.statusCode) {
-      case 403:
-        return 'Your role (${widget.session.role}) does not have access to '
-            'master data. These endpoints are ADMIN-only on the backend.';
-      case 401:
-        return 'Session expired. Please sign in again.';
-      case -1:
-        return 'Network error. Check your connection and retry.';
-      default:
-        return e.message;
-    }
+    return userMessageFor(e);
   }
 
   @override
@@ -118,17 +108,32 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
       );
     }
     final entries = _data!.entries.toList();
-    return ListView.builder(
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return ListTile(
-          leading: const Icon(Icons.folder_outlined),
-          title: Text(entry.key),
-          trailing: Text('${entry.value}',
-              style: Theme.of(context).textTheme.titleMedium),
-        );
-      },
+    return RefreshIndicator(
+      key: const Key('master-data-refresh'),
+      onRefresh: _load,
+      child: entries.isEmpty
+          ? LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: constraints.maxHeight,
+                  child: const Center(child: Text('No master data available.')),
+                ),
+              ),
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: entries.length,
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(entry.key),
+                  trailing: Text('${entry.value}',
+                      style: Theme.of(context).textTheme.titleMedium),
+                );
+              },
+            ),
     );
   }
 }

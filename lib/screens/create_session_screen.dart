@@ -89,8 +89,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
           404 => 'Subject or section not found.',
           409 =>
             'A session already exists for this subject, section, date, and period.',
-          -1 => 'Network error. Check your connection and try again.',
-          _ => e.message,
+          -1 => kNetworkErrorMessage,
+          _ => e.statusCode >= 500 ? kServerErrorMessage : e.message,
         };
         _isLoading = false;
       });
@@ -183,11 +183,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
               TextFormField(
                 controller: _dateController,
                 onTap: _pickDate,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Date',
                   hintText: 'YYYY-MM-DD',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.calendar_today),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: const Tooltip(
+                    message: 'Pick date',
+                    child: Icon(Icons.calendar_today),
+                  ),
                 ),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) {

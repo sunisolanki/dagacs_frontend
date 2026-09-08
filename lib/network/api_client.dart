@@ -38,8 +38,75 @@ class ApiClient {
 
   Future<dynamic> get(String path) => _send('GET', path);
 
-  Future<dynamic> post(String path, {Object? body}) =>
-      _send('POST', path, body: body);
+  /// Issues an authenticated GET that preserves the raw binary body and
+  /// response headers (used for M7.2 file exports).
+  ///
+  /// Returns the raw [http.Response] on success so the caller can read
+  /// `bodyBytes` and `Content-Disposition`. Non-2xx statuses go through the
+  /// exact same mapping as [get]/[_send] (including the 401 logout hook).
+  Future<http.Response> getBytes(String path) async {
+    final uri = Uri.parse('$_base$path');
+    final token = await _tokenProvider();
+    final headers = <String, String>{};
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    http.Response response;
+    try {
+      final request = http.Request('GET', uri)..headers.addAll(headers);
+      final streamed = await _http.send(request);
+      response = await http.Response.fromStream(streamed);
+    } catch (_) {
+      throw const ApiException.network();
+    }
+
+    final status = response.statusCode;
+    if (status >= 200 && status < 300) {
+      return response;
+    }
+    _throwForStatus(status, response);
+  }
+
+  Never _throwForStatus(int status, http.Response response,
+      {bool notifyUnauthorized = true}) {
+    String message = '';
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        message = (decoded['message'] as String?) ?? '';
+      }
+    } catch (_) {
+      message = '';
+    }
+    switch (status) {
+      case 400:
+        throw ApiException(400, message.isNotEmpty ? message : 'Bad request');
+      case 401:
+        // A 401 on an authenticated request means the session is expired/invalid,
+        // so the global onUnauthorized hook fires. Login (POST /auth/login) opts
+        // out: an invalid-credentials 401 is a normal flow, not a session expiry.
+        if (notifyUnauthorized) {
+          onUnauthorized?.call();
+        }
+        throw const ApiException.unauthorized();
+      case 403:
+        throw const ApiException.forbidden();
+      case 404:
+        throw const ApiException.notFound();
+      case 409:
+        throw ApiException(
+            409,
+            message.isNotEmpty
+                ? message
+                : 'Request conflicts with existing data.');
+      default:
+        throw const ApiException.serverError();
+    }
+  }
+
+  Future<dynamic> post(String path, {Object? body, bool notifyUnauthorized = true}) =>
+      _send('POST', path, body: body, notifyUnauthorized: notifyUnauthorized);
 
   Future<dynamic> put(String path, {Object? body}) =>
       _send('PUT', path, body: body);
@@ -49,7 +116,8 @@ class ApiClient {
 
   Future<dynamic> delete(String path) => _send('DELETE', path);
 
-  Future<dynamic> _send(String method, String path, {Object? body}) async {
+  Future<dynamic> _send(String method, String path,
+      {Object? body, bool notifyUnauthorized = true}) async {
     final uri = Uri.parse('$_base$path');
 
     final token = await _tokenProvider();
@@ -83,43 +151,6 @@ class ApiClient {
       }
     }
 
-    String message = '';
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) {
-        message = (decoded['message'] as String?) ?? '';
-      }
-    } catch (_) {
-      message = '';
-    }
-
-    switch (status) {
-      case 400:
-        throw ApiException(400, message.isNotEmpty ? message : 'Bad request');
-      case 401:
-        onUnauthorized?.call();
-        throw ApiException(
-            401,
-            message.isNotEmpty
-                ? message
-                : 'Session expired. Please sign in again.');
-      case 403:
-        throw ApiException(
-            403,
-            message.isNotEmpty
-                ? message
-                : 'You do not have permission to access this resource.');
-      case 404:
-        throw ApiException(404,
-            message.isNotEmpty ? message : 'Resource not found.');
-      case 409:
-        throw ApiException(
-            409,
-            message.isNotEmpty
-                ? message
-                : 'Request conflicts with existing data.');
-      default:
-        throw const ApiException.serverError();
-    }
+    _throwForStatus(status, response, notifyUnauthorized: notifyUnauthorized);
   }
 }

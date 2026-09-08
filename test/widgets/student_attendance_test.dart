@@ -64,7 +64,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         home: StudentAttendanceScreen(attendanceRepository: repo)));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Network error'), findsOneWidget);
+    expect(find.textContaining('Unable to connect'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
 

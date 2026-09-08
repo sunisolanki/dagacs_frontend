@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Network error'), findsOneWidget);
+    expect(find.textContaining('Unable to connect'), findsOneWidget);
   });
 
   testWidgets('shows invalid credentials message on 401', (tester) async {

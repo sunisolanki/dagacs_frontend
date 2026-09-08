@@ -14,7 +14,7 @@ class AuthRepository {
       final data = await _client.post('/auth/login', body: {
         'email': email,
         'password': password,
-      });
+      }, notifyUnauthorized: false);
       if (data is! Map) {
         throw const ApiException.serverError();
       }

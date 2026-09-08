@@ -34,10 +34,19 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   bool _loading = true;
   String? _error;
 
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -79,6 +88,23 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       default:
         return e.message;
     }
+  }
+
+  /// Client-side, case-insensitive search over the already-loaded student list
+  /// (name, roll number, enrollment number). The full dataset is in memory, so
+  /// no per-keystroke API call is made and no debounce is needed. An empty
+  /// (or whitespace-only) query restores the complete list.
+  List<StudentManagement> get _visibleStudents {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _students;
+    return _students.where((s) {
+      final name = s.name?.toLowerCase() ?? '';
+      final rollNumber = s.rollNumber?.toLowerCase() ?? '';
+      final enrollmentNumber = s.enrollmentNumber?.toLowerCase() ?? '';
+      return name.contains(query) ||
+          rollNumber.contains(query) ||
+          enrollmentNumber.contains(query);
+    }).toList();
   }
 
   Future<void> _openCreate() async {
@@ -174,11 +200,61 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
     if (_students.isEmpty) {
       return const Center(child: Text('No students found. Use + to add one.'));
     }
+    return Column(
+      children: [
+        _buildSearchBar(),
+        Expanded(child: _buildStudentList()),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: TextField(
+        key: const Key('student-search'),
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          hintText: 'Search by name, roll number, or enrollment number',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  key: const Key('student-search-clear'),
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentList() {
+    final visible = _visibleStudents;
+    if (visible.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('No students match'),
+          ],
+        ),
+      );
+    }
     return ListView.builder(
       key: const Key('student-list'),
-      itemCount: _students.length,
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        final student = _students[index];
+        final student = visible[index];
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: ListTile(

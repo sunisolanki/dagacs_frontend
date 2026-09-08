@@ -36,6 +36,14 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
 
+  /// Rejects an invalid start-after-end range client-side (mirrors the M7.3
+  /// report screens): no date-bearing request is issued and an inline hint is
+  /// shown instead.
+  bool get _datesInvalid =>
+      _startDate != null &&
+      _endDate != null &&
+      _startDate!.isAfter(_endDate!);
+
   HodDashboard? _dashboard;
   List<HodSectionAttendance> _sections = [];
   List<HodSubjectAttendance> _subjects = [];
@@ -56,6 +64,7 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
   }
 
   Future<void> _load() async {
+    if (_datesInvalid) return;
     setState(() {
       _loading = true;
       _tabErrors = {};
@@ -153,6 +162,7 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
     );
     if (picked == null) return;
     setState(() => _startDate = picked);
+    if (_datesInvalid) return;
     await _load();
   }
 
@@ -167,6 +177,7 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
     );
     if (picked == null) return;
     setState(() => _endDate = picked);
+    if (_datesInvalid) return;
     await _load();
   }
 
@@ -223,38 +234,51 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
     final hasFilter = _startDate != null || _endDate != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const Key('start-date-button'),
-              onPressed: _pickStartDate,
-              icon: const Icon(Icons.date_range),
-              label: Text(
-                _startDate == null ? 'Start date' : _formatDate(_startDate!),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('start-date-button'),
+                  onPressed: _pickStartDate,
+                  icon: const Icon(Icons.date_range),
+                  label: Text(
+                    _startDate == null ? 'Start date' : _formatDate(_startDate!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('end-date-button'),
+                  onPressed: _pickEndDate,
+                  icon: const Icon(Icons.date_range),
+                  label: Text(
+                    _endDate == null ? 'End date' : _formatDate(_endDate!),
+                  ),
+                ),
+              ),
+              if (hasFilter) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const Key('clear-dates-button'),
+                  onPressed: _clearDates,
+                  tooltip: 'Clear dates',
+                  icon: const Icon(Icons.clear),
+                ),
+              ],
+            ],
+          ),
+          if (_datesInvalid)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'Start date must not be after end date.',
+                style: TextStyle(color: Colors.red, fontSize: 12),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const Key('end-date-button'),
-              onPressed: _pickEndDate,
-              icon: const Icon(Icons.date_range),
-              label: Text(
-                _endDate == null ? 'End date' : _formatDate(_endDate!),
-              ),
-            ),
-          ),
-          if (hasFilter) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              key: const Key('clear-dates-button'),
-              onPressed: _clearDates,
-              tooltip: 'Clear dates',
-              icon: const Icon(Icons.clear),
-            ),
-          ],
         ],
       ),
     );

@@ -159,6 +159,99 @@ void main() {
     expect(find.byKey(const Key('toggle-status-1')), findsOneWidget);
   });
 
+  testWidgets(
+      'search filters by name case-insensitively; empty query restores all',
+      (tester) async {
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active, _inactive];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('student-search')), 'rahul');
+    await tester.pump();
+
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+    expect(find.textContaining('Anjali'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('student-search')), '');
+    await tester.pump();
+
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+    expect(find.textContaining('Anjali'), findsOneWidget);
+
+    // A whitespace-only query also restores the complete list.
+    await tester.enterText(find.byKey(const Key('student-search')), '   ');
+    await tester.pump();
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+    expect(find.textContaining('Anjali'), findsOneWidget);
+  });
+
+  testWidgets('search matches roll number and enrollment number',
+      (tester) async {
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active, _inactive];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('student-search')), '2201ce002');
+    await tester.pump();
+    expect(find.textContaining('Anjali'), findsOneWidget);
+    expect(find.textContaining('Rahul Kumar'), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('student-search')), 'ENR-001');
+    await tester.pump();
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+    expect(find.textContaining('Anjali'), findsNothing);
+  });
+
+  testWidgets('no-match search shows empty state and clear restores the list',
+      (tester) async {
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active, _inactive];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('student-search')), 'zzz');
+    await tester.pump();
+
+    expect(find.text('No students match'), findsOneWidget);
+    expect(find.textContaining('Rahul Kumar'), findsNothing);
+    expect(find.textContaining('Anjali'), findsNothing);
+    expect(find.byKey(const Key('student-search-clear')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('student-search-clear')));
+    await tester.pump();
+    expect(find.text('No students match'), findsNothing);
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+    expect(find.textContaining('Anjali'), findsOneWidget);
+    expect(find.byKey(const Key('student-search-clear')), findsNothing);
+  });
+
+  testWidgets('create and status-toggle remain functional while search is active',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active, _inactive];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('student-search')), 'rahul');
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('toggle-status-1')));
+    await tester.pumpAndSettle();
+    expect(repo.lastStatusId, 1);
+    expect(repo.lastStatus, 'INACTIVE');
+
+    await tester.tap(find.byKey(const Key('add-student')));
+    await tester.pumpAndSettle();
+    expect(find.text('Add Student'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Rahul Kumar'), findsOneWidget);
+  });
+
   testWidgets('shows empty state', (tester) async {
     final repo = _FakeStudentManagementRepository();
     await tester.pumpWidget(_wrap(repo));

@@ -119,16 +119,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   }
 
   String _messageFor(ApiException e) {
-    switch (e.statusCode) {
-      case 403:
-        return 'You are not authorized for this session.';
-      case 404:
-        return 'Session not found.';
-      case -1:
-        return 'Network error. Check your connection and retry.';
-      default:
-        return e.message;
-    }
+    return userMessageFor(e);
   }
 
   void _toggleStatus(int studentId) {
@@ -231,7 +222,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             }
           });
           putError = e is ApiException
-              ? e.message
+              ? userMessageFor(e)
               : 'Failed to update attendance for ${student.name ?? "student"}.';
           break; // Stop processing further updates on failure.
         }
@@ -289,12 +280,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = switch (e.statusCode) {
-          409 =>
-            'Cannot mark attendance on a cancelled session or duplicate record.',
-          -1 => 'Network error. Check your connection and try again.',
-          _ => e.message,
-        };
+        _error = e.statusCode == 409
+            ? 'Cannot mark attendance on a cancelled session or duplicate record.'
+            : userMessageFor(e);
       });
     } catch (_) {
       if (!mounted) return;

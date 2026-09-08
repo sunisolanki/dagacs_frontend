@@ -57,16 +57,7 @@ class _AttendanceSessionListScreenState
   }
 
   String _messageFor(ApiException e) {
-    switch (e.statusCode) {
-      case 401:
-        return 'Session expired. Please sign in again.';
-      case 403:
-        return 'You do not have permission to view attendance sessions.';
-      case -1:
-        return 'Network error. Check your connection and retry.';
-      default:
-        return e.message;
-    }
+    return userMessageFor(e);
   }
 
   Color _statusColor(String? status) {
@@ -87,6 +78,7 @@ class _AttendanceSessionListScreenState
     return Scaffold(
       appBar: AppBar(title: const Text('Attendance Sessions')),
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Create session',
         onPressed: () async {
           await Navigator.pushNamed(context, '/teacher/attendance/create');
           _load();
@@ -119,17 +111,27 @@ class _AttendanceSessionListScreenState
       );
     }
     if (_sessions.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.event_available, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('No attendance sessions yet.'),
-            const SizedBox(height: 8),
-            const Text('Tap + to create one.',
-                style: TextStyle(color: Colors.grey)),
-          ],
+      return RefreshIndicator(
+        onRefresh: _load,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SizedBox(
+              height: constraints.maxHeight,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.event_available,
+                      size: 48, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text('No attendance sessions yet.'),
+                  const SizedBox(height: 8),
+                  const Text('Tap + to create one.',
+                      style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }

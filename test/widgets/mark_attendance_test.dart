@@ -514,7 +514,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Error shown via SnackBar
-      expect(find.text('Server error'), findsOneWidget);
+      expect(find.text('Something went wrong. Please try again.'), findsOneWidget);
       // Local state reverted back to PRESENT (list still visible)
       expect(find.text('Present'), findsOneWidget);
       // SUBMIT button still visible (not navigated away)
@@ -602,7 +602,7 @@ void main() {
               sessionId: 1, attendanceRepository: repo)));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Network error'), findsOneWidget);
+      expect(find.textContaining('Unable to connect'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
 

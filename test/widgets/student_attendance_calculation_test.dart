@@ -149,7 +149,7 @@ void main() {
     expect(find.text('Present'), findsNWidgets(2));
     expect(find.text('Absent'), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
-    expect(find.textContaining('Network error'), findsOneWidget);
+    expect(find.textContaining('Unable to connect'), findsOneWidget);
   });
 
   testWidgets('one subject calculation fails -> others still render + error shown',
@@ -169,7 +169,7 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Network error'), findsOneWidget);
+    expect(find.textContaining('Unable to connect'), findsOneWidget);
     expect(find.textContaining('Percentage: 100%'), findsOneWidget);
     expect(find.text('5 / 8'), findsOneWidget);
     expect(find.text('Present'), findsNWidgets(2));
@@ -364,6 +364,6 @@ void main() {
     // Records remain; the calculation error is localized (M4.2 isolation).
     expect(find.text('Present'), findsNWidgets(2));
     expect(find.text('Absent'), findsOneWidget);
-    expect(find.textContaining('Network error'), findsOneWidget);
+    expect(find.textContaining('Unable to connect'), findsOneWidget);
   });
 }

@@ -384,7 +384,7 @@ void main() {
         fail('expected ApiException');
       } on ApiException catch (e) {
         expect(e.statusCode, 403);
-        expect(e.message, 'HOD access required');
+        expect(e.message, 'You are not authorized to perform this action.');
       }
     });
 

@@ -6,11 +6,13 @@ import 'repositories/attendance_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/hod_repository.dart';
 import 'repositories/master_data_repository.dart';
+import 'repositories/report_repository.dart';
 import 'repositories/student_profile_repository.dart';
 import 'repositories/student_management_repository.dart';
 import 'screens/attendance_session_list_screen.dart';
 import 'screens/create_session_screen.dart';
 import 'screens/hod_dashboard_screen.dart';
+import 'screens/hod_reports_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/mark_attendance_screen.dart';
@@ -19,6 +21,7 @@ import 'screens/splash_screen.dart';
 import 'screens/student_attendance_screen.dart';
 import 'screens/student_profile_screen.dart';
 import 'screens/student_management_screen.dart';
+import 'screens/teacher_reports_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -27,7 +30,10 @@ class AppDependencies {
   AppDependencies._();
 
   static final ApiClient apiClient = ApiClient(onUnauthorized: () {
-    // Session expired: force back to login once navigation is available.
+    // Session expired: clear the persisted session and force back to login
+    // once navigation is available (M7.5 lifecycle hardening). The backend
+    // remains the JWT authority; this only resets local state.
+    AppDependencies.session.clearSession();
     navigatorKey.currentState
         ?.pushNamedAndRemoveUntil('/login', (route) => false);
   });
@@ -38,6 +44,8 @@ class AppDependencies {
   static final AttendanceRepository attendanceRepository =
       AttendanceRepository(apiClient);
   static final HodRepository hodRepository = HodRepository(apiClient);
+  static final ReportRepository reportRepository =
+      ReportRepository(apiClient);
   static final StudentProfileRepository studentProfileRepository =
       StudentProfileRepository(apiClient);
   static final StudentManagementRepository studentManagementRepository =
@@ -118,6 +126,15 @@ class DAGACSApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (_) => HodDashboardScreen(
                     hodRepository: AppDependencies.hodRepository));
+          case '/hod/reports':
+            return MaterialPageRoute(
+                builder: (_) => HodReportsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    reportRepository: AppDependencies.reportRepository));
+          case '/teacher/reports':
+            return MaterialPageRoute(
+                builder: (_) => TeacherReportsScreen(
+                    reportRepository: AppDependencies.reportRepository));
           case '/admin/students':
             return MaterialPageRoute(
                 builder: (_) => StudentManagementScreen(

@@ -12,4 +12,6 @@ class AppRoutes {
   static const String studentProfile = '/student/profile';
   static const String adminStudents = '/admin/students';
   static const String hodDashboard = '/hod/dashboard';
+  static const String hodReports = '/hod/reports';
+  static const String teacherReports = '/teacher/reports';
 }
