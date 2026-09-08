@@ -30,3 +30,23 @@ class Department {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/departments`.
+class DepartmentRequest {
+  const DepartmentRequest({
+    required this.name,
+    required this.code,
+    this.description,
+  });
+
+  final String name;
+  final String code;
+  final String? description;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'code': code,
+        if (description != null && description!.isNotEmpty)
+          'description': description,
+      };
+}

@@ -41,3 +41,29 @@ class Program {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/programs`.
+class ProgramRequest {
+  const ProgramRequest({
+    required this.name,
+    required this.code,
+    required this.duration,
+    required this.departmentId,
+    this.description,
+  });
+
+  final String name;
+  final String code;
+  final String duration;
+  final int departmentId;
+  final String? description;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'code': code,
+        'duration': duration,
+        'departmentId': departmentId,
+        if (description != null && description!.isNotEmpty)
+          'description': description,
+      };
+}

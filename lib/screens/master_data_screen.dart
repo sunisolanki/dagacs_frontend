@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../core/session/session_controller.dart';
+import '../core/theme/dagacs_theme.dart';
 import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
+import '../widgets/dagacs_widgets.dart';
 
-/// Demonstrates consuming the real master-data hierarchy from the backend:
-/// Department -> Program -> AcademicSession -> (Semester | Batch) -> Section,
-/// plus the flat Subject list.
+/// ADMIN-only Master Data hub.
 ///
-/// The backend protects these endpoints for ADMIN only. For non-admin roles the
-/// request maps to 403 and this screen shows a graceful access-denied message
-/// (backend authorization is authoritative; nothing is faked on the client).
+/// Presents the seven academic master-data entities (Departments, Programs,
+/// Academic Sessions, Semesters, Batches, Sections, Subjects) with live record
+/// counts and entry to each entity's CRUD list. Non-ADMIN roles see an
+/// informational screen - backend RBAC (`/api/admin/**` requires ADMIN) stays
+/// authoritative.
 class MasterDataScreen extends StatefulWidget {
   const MasterDataScreen(
       {super.key, required this.repository, required this.session});
@@ -23,14 +25,16 @@ class MasterDataScreen extends StatefulWidget {
 }
 
 class _MasterDataScreenState extends State<MasterDataScreen> {
-  bool _loading = true;
+  bool _loading = false;
   String? _error;
-  Map<String, dynamic>? _data;
+  Map<String, int> _counts = const {};
 
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.session.role == 'ADMIN') {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -48,21 +52,21 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
       final subjects = await widget.repository.getSubjects();
       if (!mounted) return;
       setState(() {
-        _data = {
-          'Departments': departments.length,
-          'Programs': programs.length,
-          'Academic Sessions': sessions.length,
-          'Semesters': semesters.length,
-          'Batches': batches.length,
-          'Sections': sections.length,
-          'Subjects': subjects.length,
+        _counts = {
+          'departments': departments.length,
+          'programs': programs.length,
+          'academic-sessions': sessions.length,
+          'semesters': semesters.length,
+          'batches': batches.length,
+          'sections': sections.length,
+          'subjects': subjects.length,
         };
         _loading = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = _messageFor(e);
+        _error = userMessageFor(e);
         _loading = false;
       });
     } catch (_) {
@@ -74,66 +78,149 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
     }
   }
 
-  String _messageFor(ApiException e) {
-    return userMessageFor(e);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Master Data')),
-      body: _buildBody(),
+      body: widget.session.role == 'ADMIN' ? _buildAdmin() : _buildNotAdmin(),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildNotAdmin() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(DagacsSpace.xl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIconBadge(
+              icon: Icons.lock_outline,
+              color: DagacsColors.textSecondary,
+              backgroundColor: DagacsColors.surfaceAlt,
+              size: 64,
+            ),
+            SizedBox(height: DagacsSpace.lg),
+            Text(
+              'Master data management is ADMIN-only.',
+              textAlign: TextAlign.center,
+              style: DagacsTextStyles.sectionTitle,
+            ),
+            SizedBox(height: DagacsSpace.sm),
+            Text(
+              'Your role does not have access to this area.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: DagacsColors.textSecondary,
+                  fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdmin() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading master data...');
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
-    final entries = _data!.entries.toList();
     return RefreshIndicator(
-      key: const Key('master-data-refresh'),
       onRefresh: _load,
-      child: entries.isEmpty
-          ? LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: constraints.maxHeight,
-                  child: const Center(child: Text('No master data available.')),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: DagacsSpace.lg),
+        children: [
+          AppConstrainedMax(
+            maxWidth: 1120,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppPageHeader(
+                  icon: Icons.storage_outlined,
+                  title: 'Master Data',
+                  subtitle:
+                      'Manage the academic master entities of the institution',
                 ),
-              ),
-            )
-          : ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: entries.length,
-              itemBuilder: (context, index) {
-                final entry = entries[index];
-                return ListTile(
-                  leading: const Icon(Icons.folder_outlined),
-                  title: Text(entry.key),
-                  trailing: Text('${entry.value}',
-                      style: Theme.of(context).textTheme.titleMedium),
-                );
-              },
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: DagacsSpace.lg),
+                  child: AppResponsiveGrid(
+                    children: [
+                      _card(
+                        key: 'master-data-departments',
+                        route: '/master-data/departments',
+                        icon: Icons.account_balance_outlined,
+                        title: 'Departments',
+                        count: _counts['departments'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-programs',
+                        route: '/master-data/programs',
+                        icon: Icons.school_outlined,
+                        title: 'Programs',
+                        count: _counts['programs'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-academic-sessions',
+                        route: '/master-data/academic-sessions',
+                        icon: Icons.calendar_month_outlined,
+                        title: 'Academic Sessions',
+                        count: _counts['academic-sessions'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-semesters',
+                        route: '/master-data/semesters',
+                        icon: Icons.layers_outlined,
+                        title: 'Semesters',
+                        count: _counts['semesters'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-batches',
+                        route: '/master-data/batches',
+                        icon: Icons.groups_outlined,
+                        title: 'Batches',
+                        count: _counts['batches'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-sections',
+                        route: '/master-data/sections',
+                        icon: Icons.view_agenda_outlined,
+                        title: 'Sections',
+                        count: _counts['sections'] ?? 0,
+                      ),
+                      _card(
+                        key: 'master-data-subjects',
+                        route: '/master-data/subjects',
+                        icon: Icons.book_outlined,
+                        title: 'Subjects',
+                        count: _counts['subjects'] ?? 0,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({
+    required String key,
+    required String route,
+    required IconData icon,
+    required String title,
+    required int count,
+  }) {
+    return AppFeatureTile(
+      key: Key(key),
+      icon: icon,
+      title: title,
+      subtitle: '$count record${count == 1 ? '' : 's'}',
+      onTap: () => Navigator.pushNamed(context, route),
     );
   }
 }

@@ -38,3 +38,25 @@ class Section {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/sections`.
+class SectionRequest {
+  const SectionRequest({
+    required this.sectionCode,
+    required this.name,
+    required this.maxCapacity,
+    required this.batchId,
+  });
+
+  final String sectionCode;
+  final String name;
+  final int maxCapacity;
+  final int batchId;
+
+  Map<String, dynamic> toJson() => {
+        'sectionCode': sectionCode,
+        'name': name,
+        'maxCapacity': maxCapacity,
+        'batchId': batchId,
+      };
+}

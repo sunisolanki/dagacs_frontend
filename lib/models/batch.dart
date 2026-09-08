@@ -44,3 +44,28 @@ class Batch {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/batches`.
+class BatchRequest {
+  const BatchRequest({
+    required this.batchCode,
+    required this.name,
+    required this.year,
+    required this.academicSessionId,
+    required this.maxCapacity,
+  });
+
+  final String batchCode;
+  final String name;
+  final int year;
+  final int academicSessionId;
+  final int maxCapacity;
+
+  Map<String, dynamic> toJson() => {
+        'batchCode': batchCode,
+        'name': name,
+        'year': year,
+        'academicSessionId': academicSessionId,
+        'maxCapacity': maxCapacity,
+      };
+}

@@ -40,3 +40,33 @@ class Subject {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/subjects`.
+class SubjectRequest {
+  const SubjectRequest({
+    required this.code,
+    required this.name,
+    required this.creditHours,
+    required this.status,
+    this.description,
+    this.department,
+  });
+
+  final String code;
+  final String name;
+  final String creditHours;
+  final String status;
+  final String? description;
+  final String? department;
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+        'creditHours': creditHours,
+        'status': status,
+        if (description != null && description!.isNotEmpty)
+          'description': description,
+        if (department != null && department!.isNotEmpty)
+          'department': department,
+      };
+}

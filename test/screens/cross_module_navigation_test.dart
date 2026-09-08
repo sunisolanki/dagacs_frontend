@@ -261,6 +261,8 @@ void main() {
     // Authorized control is exposed.
     expect(find.byKey(const Key('admin-students-tile')), findsOneWidget);
     expect(find.text('Manage Students'), findsOneWidget);
+    expect(find.byKey(const Key('admin-master-data-tile')), findsOneWidget);
+    expect(find.text('Master Data'), findsOneWidget);
 
     // Unauthorized HOD / Teacher / Student module controls are not exposed.
     expect(find.text('HOD Dashboard'), findsNothing);
@@ -296,6 +298,8 @@ void main() {
     expect(find.text('My Profile'), findsNothing);
     expect(find.byKey(const Key('admin-students-tile')), findsNothing);
     expect(find.text('Manage Students'), findsNothing);
+    expect(find.byKey(const Key('admin-master-data-tile')), findsNothing);
+    expect(find.text('Master Data'), findsNothing);
 
     await tester.tap(find.text('HOD Dashboard'));
     await tester.pumpAndSettle();
@@ -327,6 +331,8 @@ void main() {
     expect(find.byKey(const Key('hod-reports-tile')), findsNothing);
     expect(find.byKey(const Key('admin-students-tile')), findsNothing);
     expect(find.text('Manage Students'), findsNothing);
+    expect(find.byKey(const Key('admin-master-data-tile')), findsNothing);
+    expect(find.text('Master Data'), findsNothing);
     expect(find.text('My Attendance'), findsNothing);
     expect(find.text('My Profile'), findsNothing);
 
@@ -362,6 +368,8 @@ void main() {
     // Unauthorized Admin / HOD / Teacher controls are not exposed.
     expect(find.byKey(const Key('admin-students-tile')), findsNothing);
     expect(find.text('Manage Students'), findsNothing);
+    expect(find.byKey(const Key('admin-master-data-tile')), findsNothing);
+    expect(find.text('Master Data'), findsNothing);
     expect(find.text('HOD Dashboard'), findsNothing);
     expect(find.byKey(const Key('hod-reports-tile')), findsNothing);
     expect(find.text('Attendance'), findsNothing);

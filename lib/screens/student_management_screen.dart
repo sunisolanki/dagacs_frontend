@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/dagacs_theme.dart';
 import '../models/batch.dart';
 import '../models/program.dart';
 import '../models/section.dart';
@@ -7,6 +8,7 @@ import '../models/student_management.dart';
 import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
 import '../repositories/student_management_repository.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// ADMIN-only Manage Students screen (M5.2).
 ///
@@ -178,27 +180,16 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading students...');
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
     if (_students.isEmpty) {
-      return const Center(child: Text('No students found. Use + to add one.'));
+      return const AppEmptyState(
+        icon: Icons.person_off_outlined,
+        message: 'No students found. Use + to add one.',
+      );
     }
     return Column(
       children: [
@@ -210,27 +201,44 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: TextField(
-        key: const Key('student-search'),
-        controller: _searchController,
-        onChanged: (value) => setState(() => _searchQuery = value),
-        decoration: InputDecoration(
-          hintText: 'Search by name, roll number, or enrollment number',
-          prefixIcon: const Icon(Icons.search),
-          suffixIcon: _searchQuery.isEmpty
-              ? null
-              : IconButton(
-                  key: const Key('student-search-clear'),
-                  tooltip: 'Clear search',
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
-                ),
-          border: const OutlineInputBorder(),
-          isDense: true,
+      padding: const EdgeInsets.fromLTRB(
+        DagacsSpace.lg,
+        DagacsSpace.sm,
+        DagacsSpace.lg,
+        DagacsSpace.sm,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 720),
+        child: TextField(
+          key: const Key('student-search'),
+          controller: _searchController,
+          onChanged: (value) => setState(() => _searchQuery = value),
+          decoration: InputDecoration(
+            hintText: 'Search by name, roll number, or enrollment number',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchQuery.isEmpty
+                ? null
+                : IconButton(
+                    key: const Key('student-search-clear'),
+                    tooltip: 'Clear search',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  ),
+            filled: true,
+            fillColor: DagacsColors.surfaceAlt,
+            border: const OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.all(Radius.circular(DagacsRadius.md)),
+            ),
+            enabledBorder: const OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius:
+                  BorderRadius.all(Radius.circular(DagacsRadius.md)),
+            ),
+          ),
         ),
       ),
     );
@@ -239,48 +247,64 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   Widget _buildStudentList() {
     final visible = _visibleStudents;
     if (visible.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.search_off, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('No students match'),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.search_off,
+        message: 'No students match',
       );
     }
     return ListView.builder(
       key: const Key('student-list'),
+      padding: EdgeInsets.fromLTRB(
+        DagacsSpace.lg,
+        0,
+        DagacsSpace.lg,
+        96,
+      ),
       itemCount: visible.length,
       itemBuilder: (context, index) {
         final student = visible[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: ListTile(
+        return Padding(
+          padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),
+          child: AppCard(
             key: Key('student-tile-${student.id}'),
-            leading: CircleAvatar(
-              child: Text(
-                _initials(student.name),
-                style: const TextStyle(fontSize: 14),
-              ),
+            onTap: () => _openDetail(student),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
             ),
-            title: Text(
-              '${student.name ?? '-'}  (${student.rollNumber ?? '-'})',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${student.enrollmentNumber ?? '-'} · '
-              '${student.programName ?? '-'} · ${student.batchName ?? '-'} · '
-              '${student.sectionName ?? '-'}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Row(
               children: [
-                _StatusBadge(status: student.status),
+                AppAvatar(name: student.name, size: 44),
+                const SizedBox(width: DagacsSpace.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${student.name ?? '-'}  (${student.rollNumber ?? '-'})',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${student.enrollmentNumber ?? '-'} · '
+                        '${student.programName ?? '-'} · '
+                        '${student.batchName ?? '-'} · '
+                        '${student.sectionName ?? '-'}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: DagacsSpace.sm),
+                AppStatusBadge(
+                  label: student.status ?? '-',
+                  active: student.status == 'ACTIVE',
+                ),
+                const SizedBox(width: 2),
                 IconButton(
                   key: Key('toggle-status-${student.id}'),
                   tooltip: student.isActive ? 'Deactivate' : 'Activate',
@@ -288,58 +312,24 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                     student.isActive
                         ? Icons.block
                         : Icons.check_circle_outline,
+                    color: student.isActive
+                        ? DagacsColors.error
+                        : DagacsColors.success,
                   ),
                   onPressed: () => _setStatus(
                       student, student.isActive ? 'INACTIVE' : 'ACTIVE'),
                 ),
-                const Icon(Icons.chevron_right),
+                Icon(Icons.chevron_right, color: DagacsColors.textSecondary),
               ],
             ),
-            onTap: () => _openDetail(student),
           ),
         );
       },
     );
   }
-
-  String _initials(String? name) {
-    if (name == null || name.trim().isEmpty) return '?';
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
-  }
 }
 
 enum _DetailAction { edit, toggle }
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-
-  final String? status;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = status == 'ACTIVE';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: active
-            ? Colors.green.withValues(alpha: 0.15)
-            : Colors.orange.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        status ?? '-',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: active ? Colors.green.shade800 : Colors.orange.shade900,
-        ),
-      ),
-    );
-  }
-}
 
 class _StudentDetailDialog extends StatelessWidget {
   const _StudentDetailDialog({
@@ -362,9 +352,13 @@ class _StudentDetailDialog extends StatelessWidget {
           children: [
             SizedBox(
               width: 150,
-              child: Text(label,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, color: Colors.grey)),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: DagacsColors.textSecondary,
+                ),
+              ),
             ),
             Expanded(child: Text(value ?? '-')),
           ],
@@ -372,40 +366,56 @@ class _StudentDetailDialog extends StatelessWidget {
       );
     }
 
-    return AlertDialog(
-      title: Text(student.name ?? 'Student'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            row('Roll Number', student.rollNumber),
-            row('Enrollment No', student.enrollmentNumber),
-            row('Email', student.email),
-            row('Gender', student.gender),
-            row('Father', student.fatherName),
-            row('Mother', student.motherName),
-            row('Age', student.age?.toString()),
-            row('Admission Date', student.admissionDate),
-            row('Program', student.programName),
-            row('Batch', student.batchName),
-            row('Section', student.sectionName),
-            row('Status', student.status),
-          ],
-        ),
+    return AppDialogFrame(
+      width: 480,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppAvatar(name: student.name, size: 44),
+              const SizedBox(width: DagacsSpace.lg),
+              Expanded(
+                child: Text(
+                  student.name ?? 'Student',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 28),
+          row('Roll Number', student.rollNumber),
+          row('Enrollment No', student.enrollmentNumber),
+          row('Email', student.email),
+          row('Gender', student.gender),
+          row('Father', student.fatherName),
+          row('Mother', student.motherName),
+          row('Age', student.age?.toString()),
+          row('Admission Date', student.admissionDate),
+          row('Program', student.programName),
+          row('Batch', student.batchName),
+          row('Section', student.sectionName),
+          row('Status', student.status),
+          const SizedBox(height: DagacsSpace.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              OutlinedButton(
+                key: const Key('detail-toggle-status'),
+                onPressed: onToggleStatus,
+                child: Text(student.isActive ? 'Deactivate' : 'Activate'),
+              ),
+              const SizedBox(width: DagacsSpace.sm),
+              ElevatedButton(
+                key: const Key('edit-student'),
+                onPressed: onEdit,
+                child: const Text('Edit'),
+              ),
+            ],
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          key: const Key('detail-toggle-status'),
-          onPressed: onToggleStatus,
-          child: Text(student.isActive ? 'Deactivate' : 'Activate'),
-        ),
-        TextButton(
-          key: const Key('edit-student'),
-          onPressed: onEdit,
-          child: const Text('Edit'),
-        ),
-      ],
     );
   }
 }
@@ -566,12 +576,7 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: SizedBox(
-        width: 560,
-        child: _buildContent(),
-      ),
-    );
+    return AppDialogFrame(width: 560, child: _buildContent());
   }
 
   Widget _buildContent() {
@@ -598,171 +603,138 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
         ),
       );
     }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _isEdit ? 'Edit Student' : 'Add Student',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            _fieldText(
-              key: const Key('field-rollNumber'),
-              label: 'Roll Number',
-              controller: _rollNumber,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Roll number is required' : null,
-            ),
-            _fieldText(
-              key: const Key('field-name'),
-              label: 'Name',
-              controller: _name,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-            ),
-            _fieldText(
-                key: const Key('field-fatherName'),
-                label: 'Father Name',
-                controller: _fatherName),
-            _fieldText(
-                key: const Key('field-motherName'),
-                label: 'Mother Name',
-                controller: _motherName),
-            _fieldText(
-                key: const Key('field-enrollmentNumber'),
-                label: 'Enrollment Number',
-                controller: _enrollmentNumber),
-            _fieldText(
-              key: const Key('field-age'),
-              label: 'Age',
-              controller: _age,
-              keyboardType: TextInputType.number,
-            ),
-            _fieldText(
-                key: const Key('field-admissionDate'),
-                label: 'Admission Date (e.g. 2026-01-01)',
-                controller: _admissionDate),
-            _fieldText(
-                key: const Key('field-photoUrl'),
-                label: 'Photo URL (optional)',
-                controller: _photoUrl),
-            _fieldText(
-                key: const Key('field-email'),
-                label: 'Email (optional)',
-                controller: _email),
-            DropdownButtonFormField<String>(
-              key: const Key('field-gender'),
-              decoration: const InputDecoration(labelText: 'Gender'),
-              value: _gender,
-              items: const [
-                DropdownMenuItem(value: 'M', child: Text('M')),
-                DropdownMenuItem(value: 'F', child: Text('F')),
-                DropdownMenuItem(value: 'Other', child: Text('Other')),
-              ],
-              onChanged: (v) => setState(() => _gender = v),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Gender is required' : null,
-            ),
-            DropdownButtonFormField<int>(
-              key: const Key('field-program'),
-              decoration: const InputDecoration(labelText: 'Program'),
-              value: _programId,
-              items: _programs
-                  .where((p) => p.id != null)
-                  .map((p) => DropdownMenuItem(
-                      value: p.id, child: Text(p.name ?? 'Unknown')))
-                  .toList(),
-              onChanged: (v) => setState(() => _programId = v),
-              validator: (v) => v == null ? 'Program is required' : null,
-            ),
-            DropdownButtonFormField<int>(
-              key: const Key('field-batch'),
-              decoration: const InputDecoration(labelText: 'Batch'),
-              value: _batchId,
-              items: _batches
-                  .where((b) => b.id != null)
-                  .map((b) => DropdownMenuItem(
-                      value: b.id, child: Text(b.name ?? 'Unknown')))
-                  .toList(),
-              onChanged: (v) => setState(() => _batchId = v),
-              validator: (v) => v == null ? 'Batch is required' : null,
-            ),
-            DropdownButtonFormField<int>(
-              key: const Key('field-section'),
-              decoration: const InputDecoration(labelText: 'Section'),
-              value: _sectionId,
-              items: _sections
-                  .where((s) => s.id != null)
-                  .map((s) => DropdownMenuItem(
-                      value: s.id, child: Text(s.name ?? 'Unknown')))
-                  .toList(),
-              onChanged: (v) => setState(() => _sectionId = v),
-              validator: (v) => v == null ? 'Section is required' : null,
-            ),
-            DropdownButtonFormField<String>(
-              key: const Key('field-status'),
-              decoration: const InputDecoration(labelText: 'Status'),
-              value: _status ?? 'ACTIVE',
-              items: const [
-                DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
-                DropdownMenuItem(value: 'INACTIVE', child: Text('INACTIVE')),
-              ],
-              onChanged: (v) => setState(() => _status = v),
-            ),
-            if (_submitError != null) ...[
-              const SizedBox(height: 12),
-              Text(_submitError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _isEdit ? 'Edit Student' : 'Add Student',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          AppFormTextField(
+            key: const Key('field-rollNumber'),
+            label: 'Roll Number',
+            controller: _rollNumber,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Roll number is required'
+                : null,
+          ),
+          AppFormTextField(
+            key: const Key('field-name'),
+            label: 'Name',
+            controller: _name,
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+          ),
+          AppFormTextField(
+              key: const Key('field-fatherName'),
+              label: 'Father Name',
+              controller: _fatherName),
+          AppFormTextField(
+              key: const Key('field-motherName'),
+              label: 'Mother Name',
+              controller: _motherName),
+          AppFormTextField(
+              key: const Key('field-enrollmentNumber'),
+              label: 'Enrollment Number',
+              controller: _enrollmentNumber),
+          AppFormTextField(
+            key: const Key('field-age'),
+            label: 'Age',
+            controller: _age,
+            keyboardType: TextInputType.number,
+          ),
+          AppFormTextField(
+              key: const Key('field-admissionDate'),
+              label: 'Admission Date (e.g. 2026-01-01)',
+              controller: _admissionDate),
+          AppFormTextField(
+              key: const Key('field-photoUrl'),
+              label: 'Photo URL (optional)',
+              controller: _photoUrl),
+          AppFormTextField(
+              key: const Key('field-email'),
+              label: 'Email (optional)',
+              controller: _email),
+          AppFormDropdown<String>(
+            key: const Key('field-gender'),
+            label: 'Gender',
+            value: _gender,
+            items: const [
+              DropdownMenuItem(value: 'M', child: Text('M')),
+              DropdownMenuItem(value: 'F', child: Text('F')),
+              DropdownMenuItem(value: 'Other', child: Text('Other')),
             ],
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: _submitting
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  key: const Key('submit-student'),
-                  onPressed: _submitting ? null : _submit,
-                  child: Text(_isEdit ? 'Save Changes' : 'Create Student'),
-                ),
-              ],
+            onChanged: (v) => setState(() => _gender = v),
+            validator: (v) =>
+                (v == null || v.isEmpty) ? 'Gender is required' : null,
+          ),
+          AppFormDropdown<int>(
+            key: const Key('field-program'),
+            label: 'Program',
+            value: _programId,
+            items: _programs
+                .where((p) => p.id != null)
+                .map((p) => DropdownMenuItem(
+                    value: p.id, child: Text(p.name ?? 'Unknown')))
+                .toList(),
+            onChanged: (v) => setState(() => _programId = v),
+            validator: (v) => v == null ? 'Program is required' : null,
+          ),
+          AppFormDropdown<int>(
+            key: const Key('field-batch'),
+            label: 'Batch',
+            value: _batchId,
+            items: _batches
+                .where((b) => b.id != null)
+                .map((b) => DropdownMenuItem(
+                    value: b.id, child: Text(b.name ?? 'Unknown')))
+                .toList(),
+            onChanged: (v) => setState(() => _batchId = v),
+            validator: (v) => v == null ? 'Batch is required' : null,
+          ),
+          AppFormDropdown<int>(
+            key: const Key('field-section'),
+            label: 'Section',
+            value: _sectionId,
+            items: _sections
+                .where((s) => s.id != null)
+                .map((s) => DropdownMenuItem(
+                    value: s.id, child: Text(s.name ?? 'Unknown')))
+                .toList(),
+            onChanged: (v) => setState(() => _sectionId = v),
+            validator: (v) => v == null ? 'Section is required' : null,
+          ),
+          AppFormDropdown<String>(
+            key: const Key('field-status'),
+            label: 'Status',
+            value: _status ?? 'ACTIVE',
+            items: const [
+              DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
+              DropdownMenuItem(value: 'INACTIVE', child: Text('INACTIVE')),
+            ],
+            onChanged: (v) => setState(() => _status = v),
+          ),
+          if (_submitError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _submitError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           ],
-        ),
+          const SizedBox(height: 8),
+          AppFormActions(
+            onCancel: () => Navigator.of(context).pop(),
+            onSubmit: _submit,
+            submitting: _submitting,
+            submitKey: 'submit-student',
+            submitLabel: _isEdit ? 'Save Changes' : 'Create Student',
+          ),
+        ],
       ),
     );
   }
-
-  Widget _fieldText({
-    required Key key,
-    required String label,
-    required TextEditingController controller,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: TextFormField(
-        key: key,
-        controller: controller,
-        decoration: InputDecoration(labelText: label),
-        keyboardType: keyboardType,
-        validator: validator,
-      ),
-    );
-  }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

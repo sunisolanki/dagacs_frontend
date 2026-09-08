@@ -38,3 +38,25 @@ class Semester {
     );
   }
 }
+
+/// Mutable fields sent for POST/PUT `/api/admin/semesters`.
+class SemesterRequest {
+  const SemesterRequest({
+    required this.name,
+    required this.code,
+    required this.year,
+    required this.academicSessionId,
+  });
+
+  final String name;
+  final String code;
+  final int year;
+  final int academicSessionId;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'code': code,
+        'year': year,
+        'academicSessionId': academicSessionId,
+      };
+}

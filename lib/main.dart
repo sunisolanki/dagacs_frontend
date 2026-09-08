@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/theme/dagacs_theme.dart';
 import 'core/session/session_controller.dart';
 import 'network/api_client.dart';
 import 'repositories/attendance_repository.dart';
@@ -16,6 +17,13 @@ import 'screens/hod_reports_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/mark_attendance_screen.dart';
+import 'screens/master_data/academic_session_list_screen.dart';
+import 'screens/master_data/batch_list_screen.dart';
+import 'screens/master_data/department_list_screen.dart';
+import 'screens/master_data/program_list_screen.dart';
+import 'screens/master_data/section_list_screen.dart';
+import 'screens/master_data/semester_list_screen.dart';
+import 'screens/master_data/subject_list_screen.dart';
 import 'screens/master_data_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/student_attendance_screen.dart';
@@ -67,11 +75,7 @@ class DAGACSApp extends StatelessWidget {
     return MaterialApp(
       title: 'DAGACS',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF1A73E8),
-        useMaterial3: true,
-        visualDensity: VisualDensity.compact,
-      ),
+      theme: buildDagacsTheme(),
       navigatorKey: navigatorKey,
       initialRoute: '/splash',
       onGenerateRoute: (settings) {
@@ -95,6 +99,34 @@ class DAGACSApp extends StatelessWidget {
                 builder: (_) => MasterDataScreen(
                     repository: AppDependencies.masterDataRepository,
                     session: AppDependencies.session));
+          case '/master-data/departments':
+            return MaterialPageRoute(
+                builder: (_) => DepartmentListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/programs':
+            return MaterialPageRoute(
+                builder: (_) => ProgramListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/academic-sessions':
+            return MaterialPageRoute(
+                builder: (_) => AcademicSessionListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/semesters':
+            return MaterialPageRoute(
+                builder: (_) => SemesterListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/batches':
+            return MaterialPageRoute(
+                builder: (_) => BatchListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/sections':
+            return MaterialPageRoute(
+                builder: (_) => SectionListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case '/master-data/subjects':
+            return MaterialPageRoute(
+                builder: (_) => SubjectListScreen(
+                    repository: AppDependencies.masterDataRepository));
           case '/teacher/attendance':
             return MaterialPageRoute(
                 builder: (_) => AttendanceSessionListScreen(
