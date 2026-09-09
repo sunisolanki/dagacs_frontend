@@ -140,6 +140,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
     required this.textSecondary,
     required this.brandSoft,
     required this.accentSoft,
+    this.elevation = 0,
   });
 
   final Color background;
@@ -148,6 +149,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
   final Color textSecondary;
   final Color brandSoft;
   final Color accentSoft;
+  final double elevation;
 
   static const DagacsTheme light = DagacsTheme(
     background: DagacsColors.background,
@@ -156,6 +158,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
     textSecondary: DagacsColors.textSecondary,
     brandSoft: DagacsColors.brandSoft,
     accentSoft: DagacsColors.accentSoft,
+    elevation: 0,
   );
 
   /// Resolves to the app-registered theme, or the built-in light tokens when
@@ -172,6 +175,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
     Color? textSecondary,
     Color? brandSoft,
     Color? accentSoft,
+    double? elevation,
   }) {
     return DagacsTheme(
       background: background ?? this.background,
@@ -180,6 +184,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
       textSecondary: textSecondary ?? this.textSecondary,
       brandSoft: brandSoft ?? this.brandSoft,
       accentSoft: accentSoft ?? this.accentSoft,
+      elevation: elevation ?? this.elevation,
     );
   }
 
@@ -193,6 +198,7 @@ class DagacsTheme extends ThemeExtension<DagacsTheme> {
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       brandSoft: Color.lerp(brandSoft, other.brandSoft, t)!,
       accentSoft: Color.lerp(accentSoft, other.accentSoft, t)!,
+      elevation: t * other.elevation,
     );
   }
 }

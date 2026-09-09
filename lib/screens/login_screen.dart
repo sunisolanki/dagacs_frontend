@@ -21,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
   bool _isLoading = false;
   bool _obscure = true;
   String? _error;
@@ -29,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -160,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
           end: Alignment.bottomRight,
           colors: [
             DagacsColors.brandPrimary,
-            Color(0xFF0A538F),
+            DagacsColors.brandDark,
             DagacsColors.brandDark,
           ],
         ),
@@ -249,6 +253,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 prefixIcon: Icons.email_outlined,
                 textInputAction: TextInputAction.next,
+                autofocus: true,
+                onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Email is required';
@@ -263,6 +269,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: _obscure,
                 prefixIcon: Icons.lock_outline,
                 textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _handleLogin(),
+                autofocus: false,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Password is required';
@@ -303,19 +311,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ],
               const SizedBox(height: DagacsSpace.lg),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Sign In'),
-                ),
+              AppPrimaryButton(
+                onPressed: _handleLogin,
+                loading: _isLoading,
+                child: const Text('Sign In'),
               ),
             ],
           ),

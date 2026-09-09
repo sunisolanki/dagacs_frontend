@@ -130,7 +130,7 @@ void main() {
   });
 
   group('MasterDataRepository.createAcademicSession', () {
-    test('sends the full numeric payload to admin/academic-sessions',
+    test('sends the full payload to admin/academic-sessions',
         () async {
       late http.Request seen;
       final client = ApiClient(
@@ -139,7 +139,7 @@ void main() {
         httpClient: _MockClient((req) {
           seen = req;
           return http.Response(
-              '{"id":1,"name":"2026-27 Sem 1","code":"S1","semester":"1"}', 200,
+              '{"id":1,"name":"2026-27 Sem 1","code":"S1"}', 200,
               headers: {'content-type': 'application/json'});
         }),
       );
@@ -147,10 +147,6 @@ void main() {
       await repo.createAcademicSession(const AcademicSessionRequest(
         name: '2026-27 Sem 1',
         code: 'S1',
-        semester: '1',
-        durationHours: 16,
-        lecturePeriods: 4,
-        credits: 3,
         programId: 2,
       ));
       expect(seen.method, 'POST');
@@ -158,17 +154,13 @@ void main() {
       expect(jsonDecode(seen.body), {
         'name': '2026-27 Sem 1',
         'code': 'S1',
-        'semester': '1',
-        'durationHours': 16,
-        'lecturePeriods': 4,
-        'credits': 3,
         'programId': 2,
       });
     });
   });
 
   group('MasterDataRepository.createSubject', () {
-    test('sends code/name/creditHours/status/department to admin/subjects',
+    test('sends code/name/creditHours/status/departmentId to admin/subjects',
         () async {
       late http.Request seen;
       final client = ApiClient(
@@ -185,8 +177,8 @@ void main() {
         code: 'CS301',
         name: 'DBMS',
         creditHours: '3',
+        departmentId: 1,
         status: 'ACTIVE',
-        department: 'Computer Science',
       ));
       expect(seen.url.path, '/api/admin/subjects');
       expect(jsonDecode(seen.body), {
@@ -194,7 +186,7 @@ void main() {
         'name': 'DBMS',
         'creditHours': '3',
         'status': 'ACTIVE',
-        'department': 'Computer Science',
+        'departmentId': 1,
       });
       expect(subject.name, 'DBMS');
     });

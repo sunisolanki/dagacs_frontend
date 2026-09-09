@@ -157,7 +157,7 @@ void main() {
     expect(repo.programReq!.departmentId, 1);
   });
 
-  testWidgets('academic session form maps numeric fields and programId',
+  testWidgets('academic session form maps name/code and programId',
       (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo, (c) => showAcademicSessionForm(c, repo));
@@ -165,38 +165,31 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('field-name')), '2026-27 Sem 1');
     await tester.enterText(find.byKey(const Key('field-code')), 'S1');
-    await tester.enterText(find.byKey(const Key('field-semester')), '1');
-    await tester.enterText(find.byKey(const Key('field-durationHours')), '16');
-    await tester.enterText(
-        find.byKey(const Key('field-lecturePeriods')), '4');
-    await tester.enterText(find.byKey(const Key('field-credits')), '3');
     await _submit(tester, 'submit-academic-session');
 
     expect(repo.sessionReq!.name, '2026-27 Sem 1');
     expect(repo.sessionReq!.code, 'S1');
-    expect(repo.sessionReq!.semester, '1');
-    expect(repo.sessionReq!.durationHours, 16);
-    expect(repo.sessionReq!.lecturePeriods, 4);
-    expect(repo.sessionReq!.credits, 3);
     expect(repo.sessionReq!.programId, 1);
   });
 
-  testWidgets('academic session form rejects non-numeric values',
+  testWidgets('academic session form no longer exposes removed fields',
       (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo, (c) => showAcademicSessionForm(c, repo));
 
-    await tester.enterText(find.byKey(const Key('field-name')), 'S');
-    await tester.enterText(find.byKey(const Key('field-code')), 'S');
-    await tester.enterText(find.byKey(const Key('field-semester')), '1');
+    expect(find.byKey(const Key('field-semester')), findsNothing);
+    expect(find.byKey(const Key('field-durationHours')), findsNothing);
+    expect(find.byKey(const Key('field-lecturePeriods')), findsNothing);
+    expect(find.byKey(const Key('field-credits')), findsNothing);
+
     await tester.enterText(
-        find.byKey(const Key('field-durationHours')), 'abc');
-    await tester.enterText(find.byKey(const Key('field-lecturePeriods')), '4');
-    await tester.enterText(find.byKey(const Key('field-credits')), '3');
+        find.byKey(const Key('field-name')), '2026-27');
+    await tester.enterText(find.byKey(const Key('field-code')), 'S2');
     await _submit(tester, 'submit-academic-session');
 
-    expect(find.text('Duration must be a number'), findsOneWidget);
-    expect(repo.sessionReq, isNull);
+    expect(repo.sessionReq!.name, '2026-27');
+    expect(repo.sessionReq!.code, 'S2');
+    expect(repo.sessionReq!.programId, 1);
   });
 
   testWidgets('semester form maps fields, year and academicSessionId',
@@ -248,11 +241,12 @@ void main() {
     expect(repo.sectionReq!.batchId, 1);
   });
 
-  testWidgets('subject form maps fields with ACTIVE status by default',
+  testWidgets('subject form maps fields with ACTIVE status and default department',
       (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo, (c) => showSubjectForm(c, repo));
 
+    expect(find.byKey(const Key('field-department')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('field-code')), 'CS301');
     await tester.enterText(find.byKey(const Key('field-name')), 'DBMS');
     await tester.enterText(find.byKey(const Key('field-creditHours')), '3');
@@ -261,7 +255,21 @@ void main() {
     expect(repo.subjectReq!.code, 'CS301');
     expect(repo.subjectReq!.name, 'DBMS');
     expect(repo.subjectReq!.creditHours, '3');
+    expect(repo.subjectReq!.departmentId, 1);
     expect(repo.subjectReq!.status, 'ACTIVE');
+  });
+
+  testWidgets('subject form rejects non-numeric credit hours', (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo, (c) => showSubjectForm(c, repo));
+
+    await tester.enterText(find.byKey(const Key('field-code')), 'CS301');
+    await tester.enterText(find.byKey(const Key('field-name')), 'DBMS');
+    await tester.enterText(find.byKey(const Key('field-creditHours')), 'abc');
+    await _submit(tester, 'submit-subject');
+
+    expect(find.text('Credit hours must be a positive number'), findsOneWidget);
+    expect(repo.subjectReq, isNull);
   });
 
   testWidgets('subject edit preserves the existing status', (tester) async {
@@ -283,6 +291,7 @@ void main() {
     expect(repo.subjectUpdateId, 1);
     expect(repo.subjectReq!.code, 'CS101A');
     expect(repo.subjectReq!.name, 'OOP');
+    expect(repo.subjectReq!.departmentId, 1);
     expect(repo.subjectReq!.status, 'INACTIVE');
   });
 }

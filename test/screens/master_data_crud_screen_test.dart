@@ -189,7 +189,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('department-delete-2')));
     await tester.pumpAndSettle();
-    expect(find.text('Delete "Electronics"? This cannot be undone.'),
+    expect(find.textContaining('Delete "Electronics"? This cannot be undone.'),
         findsOneWidget);
 
     await tester.tap(find.byKey(const Key('department-confirm-delete')));
@@ -217,7 +217,8 @@ void main() {
     expect(find.byKey(const Key('department-tile-1')), findsOneWidget);
   });
 
-  testWidgets('a 409 delete surfaces the backend message', (tester) async {
+  testWidgets('a 409 delete explains that a referenced record cannot be removed',
+      (tester) async {
     final repo = _FakeMasterDataRepository(const [
       Department(id: 1, name: 'Computer Science', code: 'CS'),
     ])
@@ -231,8 +232,23 @@ void main() {
     await tester.pump();
 
     expect(
-        find.text('Cannot delete department. Program(s) exist: CSE'),
+        find.text('Unable to delete this record because it is being used elsewhere.'),
         findsOneWidget);
     expect(find.byKey(const Key('department-tile-1')), findsOneWidget);
+  });
+
+  testWidgets('client-side search filters already-loaded records', (tester) async {
+    final repo = _FakeMasterDataRepository(const [
+      Department(id: 1, name: 'Computer Science', code: 'CS'),
+      Department(id: 2, name: 'Electronics', code: 'EC'),
+    ]);
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('department-search')), 'elect');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('department-tile-1')), findsNothing);
+    expect(find.byKey(const Key('department-tile-2')), findsOneWidget);
   });
 }

@@ -22,9 +22,7 @@ class AcademicSessionListScreen extends StatelessWidget {
       titleOf: (s) => s.name ?? 'Unknown',
       subtitleOf: (s) => <String?>[
             s.code,
-            s.semester,
             s.program?.name,
-            s.durationHours == null ? null : '${s.durationHours}h',
           ]
           .where((v) => v != null && v.isNotEmpty)
           .join(' · '),

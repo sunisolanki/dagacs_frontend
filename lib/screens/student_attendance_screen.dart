@@ -4,6 +4,7 @@ import '../models/attendance_percentage.dart';
 import '../models/attendance_record.dart';
 import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// Read-only student attendance view. The backend resolves the student
 /// identity from the JWT — no studentId is accepted from the client.
@@ -224,25 +225,11 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading your attendance...');
     }
     // Records failure is still a hard error for the whole screen (frozen behavior).
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
     if (_records.isEmpty) {
       return RefreshIndicator(

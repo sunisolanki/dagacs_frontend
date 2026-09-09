@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/navigation/navigator.dart';
 import 'core/theme/dagacs_theme.dart';
 import 'core/session/session_controller.dart';
 import 'network/api_client.dart';
@@ -43,7 +44,7 @@ class AppDependencies {
     // remains the JWT authority; this only resets local state.
     AppDependencies.session.clearSession();
     navigatorKey.currentState
-        ?.pushNamedAndRemoveUntil('/login', (route) => false);
+        ?.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   });
 
   static final AuthRepository authRepository = AuthRepository(apiClient);
@@ -77,97 +78,97 @@ class DAGACSApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildDagacsTheme(),
       navigatorKey: navigatorKey,
-      initialRoute: '/splash',
+      initialRoute: AppRoutes.splash,
       onGenerateRoute: (settings) {
         switch (settings.name) {
-          case '/splash':
+          case AppRoutes.splash:
             return MaterialPageRoute(
                 builder: (_) => SplashScreen(session: AppDependencies.session));
-          case '/login':
+          case AppRoutes.login:
             return MaterialPageRoute(
                 builder: (_) => LoginScreen(
                     authRepository: AppDependencies.authRepository,
                     session: AppDependencies.session));
-          case '/home':
+          case AppRoutes.home:
             return MaterialPageRoute(
                 builder: (_) => HomeScreen(
                     session: AppDependencies.session,
                     masterDataRepository:
                         AppDependencies.masterDataRepository));
-          case '/master-data':
+          case AppRoutes.masterData:
             return MaterialPageRoute(
                 builder: (_) => MasterDataScreen(
                     repository: AppDependencies.masterDataRepository,
                     session: AppDependencies.session));
-          case '/master-data/departments':
+          case AppRoutes.masterDataDepartments:
             return MaterialPageRoute(
                 builder: (_) => DepartmentListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/programs':
+          case AppRoutes.masterDataPrograms:
             return MaterialPageRoute(
                 builder: (_) => ProgramListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/academic-sessions':
+          case AppRoutes.masterDataAcademicSessions:
             return MaterialPageRoute(
                 builder: (_) => AcademicSessionListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/semesters':
+          case AppRoutes.masterDataSemesters:
             return MaterialPageRoute(
                 builder: (_) => SemesterListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/batches':
+          case AppRoutes.masterDataBatches:
             return MaterialPageRoute(
                 builder: (_) => BatchListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/sections':
+          case AppRoutes.masterDataSections:
             return MaterialPageRoute(
                 builder: (_) => SectionListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/master-data/subjects':
+          case AppRoutes.masterDataSubjects:
             return MaterialPageRoute(
                 builder: (_) => SubjectListScreen(
                     repository: AppDependencies.masterDataRepository));
-          case '/teacher/attendance':
+          case AppRoutes.teacherAttendance:
             return MaterialPageRoute(
                 builder: (_) => AttendanceSessionListScreen(
                     attendanceRepository:
                         AppDependencies.attendanceRepository));
-          case '/teacher/attendance/create':
+          case AppRoutes.createSession:
             return MaterialPageRoute(
                 builder: (_) => CreateSessionScreen(
                     attendanceRepository:
                         AppDependencies.attendanceRepository));
-          case '/teacher/attendance/mark':
+          case AppRoutes.markAttendance:
             final sessionId = settings.arguments as int;
             return MaterialPageRoute(
                 builder: (_) => MarkAttendanceScreen(
                     sessionId: sessionId,
                     attendanceRepository:
                         AppDependencies.attendanceRepository));
-          case '/student/attendance':
+          case AppRoutes.studentAttendance:
             return MaterialPageRoute(
                 builder: (_) => StudentAttendanceScreen(
                     attendanceRepository:
                         AppDependencies.attendanceRepository));
-          case '/student/profile':
+          case AppRoutes.studentProfile:
             return MaterialPageRoute(
                 builder: (_) => StudentProfileScreen(
                     profileRepository:
                         AppDependencies.studentProfileRepository));
-          case '/hod/dashboard':
+          case AppRoutes.hodDashboard:
             return MaterialPageRoute(
                 builder: (_) => HodDashboardScreen(
                     hodRepository: AppDependencies.hodRepository));
-          case '/hod/reports':
+          case AppRoutes.hodReports:
             return MaterialPageRoute(
                 builder: (_) => HodReportsScreen(
                     hodRepository: AppDependencies.hodRepository,
                     reportRepository: AppDependencies.reportRepository));
-          case '/teacher/reports':
+          case AppRoutes.teacherReports:
             return MaterialPageRoute(
                 builder: (_) => TeacherReportsScreen(
                     reportRepository: AppDependencies.reportRepository));
-          case '/admin/students':
+          case AppRoutes.adminStudents:
             return MaterialPageRoute(
                 builder: (_) => StudentManagementScreen(
                     repository: AppDependencies.studentManagementRepository,

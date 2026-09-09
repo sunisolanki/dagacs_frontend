@@ -20,7 +20,9 @@ void main() {
     final repo = _FakeAttendanceRepository();
     await tester.pumpWidget(MaterialApp(
         home: CreateSessionScreen(attendanceRepository: repo)));
-    await tester.tap(find.byType(ElevatedButton));
+    final submit = find.byType(ElevatedButton);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
     await tester.pump();
     expect(find.text('Subject ID is required'), findsOneWidget);
     expect(find.text('Section ID is required'), findsOneWidget);
@@ -38,7 +40,9 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(1), '2');
     await tester.enterText(find.byType(TextFormField).at(2), '1st');
     await tester.enterText(find.byType(TextFormField).at(3), '2026-09-04');
-    await tester.tap(find.byType(ElevatedButton).last);
+    final submit = find.byType(ElevatedButton).last;
+    await tester.ensureVisible(submit);
+    await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(find.textContaining('session already exists'), findsOneWidget);
   });

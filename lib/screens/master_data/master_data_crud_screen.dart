@@ -50,6 +50,24 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
   List<T> _items = const [];
   bool _loading = true;
   String? _error;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<T> get _visibleItems {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return _items;
+    return _items.where((item) {
+      final title = widget.titleOf(item).toLowerCase();
+      final subtitle = widget.subtitleOf?.call(item)?.toLowerCase() ?? '';
+      return title.contains(query) || subtitle.contains(query);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -97,20 +115,11 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
   Future<void> _confirmDelete(T item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete'),
-        content: Text('Delete "${widget.titleOf(item)}"? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            key: Key('${widget.entityKey}-confirm-delete'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (dialogContext) => AppConfirmDialog(
+        title: 'Delete ${widget.title}',
+        message: 'Delete "${widget.titleOf(item)}"? This cannot be undone. '
+            'Records that are used elsewhere cannot be deleted.',
+        confirmKey: Key('${widget.entityKey}-confirm-delete'),
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -123,8 +132,11 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
       await _load();
     } on ApiException catch (e) {
       if (!mounted) return;
+      final message = e.statusCode == 409
+          ? 'Unable to delete this record because it is being used elsewhere.'
+          : userMessageFor(e);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(userMessageFor(e))),
+        SnackBar(content: Text(message)),
       );
     } catch (_) {
       if (!mounted) return;
@@ -161,6 +173,7 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
         message: widget.emptyText,
       );
     }
+    final visible = _visibleItems;
     return RefreshIndicator(
       key: Key('${widget.entityKey}-refresh'),
       onRefresh: _load,
@@ -173,9 +186,40 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
           DagacsSpace.lg,
           96, // clearance for the FAB
         ),
-        itemCount: _items.length,
+        itemCount: visible.isEmpty ? 3 : visible.length + 2,
         itemBuilder: (context, index) {
-          final item = _items[index];
+          if (index == 0) {
+            return AppPageHeader(
+              icon: widget.icon,
+              subtitle: 'Search, add, edit or remove ${widget.title.toLowerCase()}.',
+            );
+          }
+          if (index == 1) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DagacsSpace.lg,
+                0,
+                DagacsSpace.lg,
+                DagacsSpace.lg,
+              ),
+              child: AppSearchField(
+                key: Key('${widget.entityKey}-search'),
+                controller: _searchController,
+                hintText: 'Search ${widget.title.toLowerCase()}',
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+            );
+          }
+          if (visible.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: DagacsSpace.xxxl),
+              child: AppEmptyState(
+                icon: Icons.search_off_outlined,
+                message: 'No ${widget.title.toLowerCase()} match your search.',
+              ),
+            );
+          }
+          final item = visible[index - 2];
           final subtitle = widget.subtitleOf?.call(item);
           return Padding(
             padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),

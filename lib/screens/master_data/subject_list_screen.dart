@@ -21,7 +21,7 @@ class SubjectListScreen extends StatelessWidget {
       idOf: (s) => s.id!,
       titleOf: (s) => s.name ?? 'Unknown',
       subtitleOf: (s) =>
-          <String?>[s.code, s.creditHours, s.department, s.status]
+          <String?>[s.code, s.creditHours, s.department?.name, s.status]
               .where((v) => v != null && v.isNotEmpty)
               .join(' · '),
       fetch: repository.getSubjects,

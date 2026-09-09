@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/navigation/navigator.dart';
 import '../core/session/session_controller.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../network/api_exception.dart';
@@ -150,49 +151,49 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
                     children: [
                       _card(
                         key: 'master-data-departments',
-                        route: '/master-data/departments',
+                        route: AppRoutes.masterDataDepartments,
                         icon: Icons.account_balance_outlined,
                         title: 'Departments',
                         count: _counts['departments'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-programs',
-                        route: '/master-data/programs',
+                        route: AppRoutes.masterDataPrograms,
                         icon: Icons.school_outlined,
                         title: 'Programs',
                         count: _counts['programs'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-academic-sessions',
-                        route: '/master-data/academic-sessions',
+                        route: AppRoutes.masterDataAcademicSessions,
                         icon: Icons.calendar_month_outlined,
                         title: 'Academic Sessions',
                         count: _counts['academic-sessions'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-semesters',
-                        route: '/master-data/semesters',
+                        route: AppRoutes.masterDataSemesters,
                         icon: Icons.layers_outlined,
                         title: 'Semesters',
                         count: _counts['semesters'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-batches',
-                        route: '/master-data/batches',
+                        route: AppRoutes.masterDataBatches,
                         icon: Icons.groups_outlined,
                         title: 'Batches',
                         count: _counts['batches'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-sections',
-                        route: '/master-data/sections',
+                        route: AppRoutes.masterDataSections,
                         icon: Icons.view_agenda_outlined,
                         title: 'Sections',
                         count: _counts['sections'] ?? 0,
                       ),
                       _card(
                         key: 'master-data-subjects',
-                        route: '/master-data/subjects',
+                        route: AppRoutes.masterDataSubjects,
                         icon: Icons.book_outlined,
                         title: 'Subjects',
                         count: _counts['subjects'] ?? 0,

@@ -6,6 +6,8 @@ import '../models/attendance_update_request.dart';
 import '../models/session_student.dart';
 import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
+import '../core/theme/dagacs_theme.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// Screen for marking or updating attendance for a single session.
 ///
@@ -136,17 +138,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
         _statusMap.remove(studentId);
       }
     });
-  }
-
-  Color _statusColor(String? status) {
-    switch (status) {
-      case 'PRESENT':
-        return Colors.green;
-      case 'ABSENT':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
   }
 
   String _statusLabel(String? status) {
@@ -318,47 +309,21 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading students...');
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
     if (_sessionCancelled) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'This session is cancelled. Attendance cannot be marked.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.red, fontSize: 16),
-          ),
-        ),
+      return const AppEmptyState(
+        icon: Icons.cancel_outlined,
+        message: 'This session is cancelled. Attendance cannot be marked.',
       );
     }
     if (_students.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.people_outline, size: 48, color: Colors.grey),
-            const SizedBox(height: 16),
-            const Text('No students found for this session.'),
-          ],
-        ),
+      return const AppEmptyState(
+        icon: Icons.people_outline,
+        message: 'No students are available for this session.',
       );
     }
     return Column(
@@ -368,37 +333,59 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
             onRefresh: _load,
             child: ListView.builder(
               itemCount: _students.length,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: DagacsSpace.lg, vertical: DagacsSpace.md),
               itemBuilder: (context, index) {
                 final student = _students[index];
                 final studentId = student.id;
                 final status =
                     studentId != null ? _statusMap[studentId] : null;
 
-                return ListTile(
-                  leading: Icon(_statusIcon(status),
-                      color: _statusColor(status)),
-                  title: Text(student.name ?? 'Unknown'),
-                  subtitle: Text(student.rollNumber ?? '-'),
-                  trailing: GestureDetector(
-                    onTap: studentId != null && !_sessionCancelled
-                        ? () => _toggleStatus(studentId)
-                        : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _statusColor(status).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _statusColor(status)),
-                      ),
-                      child: Text(
-                        _statusLabel(status),
-                        style: TextStyle(
-                          color: _statusColor(status),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: DagacsSpace.sm),
+                  child: AppCard(
+                    child: Row(
+                      children: [
+                        AppIconBadge(
+                          icon: _statusIcon(status),
+                          color: status == 'ABSENT'
+                              ? DagacsColors.error
+                              : status == 'PRESENT'
+                                  ? DagacsColors.success
+                                  : DagacsColors.textSecondary,
+                          backgroundColor: status == 'ABSENT'
+                              ? DagacsColors.errorBg
+                              : status == 'PRESENT'
+                                  ? DagacsColors.successBg
+                                  : DagacsColors.surfaceAlt,
                         ),
-                      ),
+                        const SizedBox(width: DagacsSpace.lg),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(student.name ?? 'Unknown',
+                                  style: Theme.of(context).textTheme.titleSmall),
+                              const SizedBox(height: DagacsSpace.xs),
+                              Text(student.rollNumber ?? 'No roll number',
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        Semantics(
+                          button: true,
+                          label: 'Change ${student.name ?? 'student'} attendance status',
+                          child: TextButton(
+                            onPressed: studentId != null && !_submitting
+                                ? () => _toggleStatus(studentId)
+                                : null,
+                            child: AppStatusBadge(
+                              label: _statusLabel(status),
+                              active: status == 'PRESENT',
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );

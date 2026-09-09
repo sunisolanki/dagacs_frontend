@@ -9,6 +9,8 @@ import '../models/hod_student_attendance.dart';
 import '../models/hod_subject_attendance.dart';
 import '../network/api_exception.dart';
 import '../repositories/hod_repository.dart';
+import '../core/theme/dagacs_theme.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// Read-only HOD governance & analytics dashboard.
 ///
@@ -278,6 +280,15 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
                 'Start date must not be after end date.',
                 style: TextStyle(color: Colors.red, fontSize: 12),
               ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text(
+                'The selected range applies to the overview and rollups.',
+                style: TextStyle(
+                    color: DagacsColors.textSecondary, fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -291,7 +302,7 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
 
   Widget _buildTabBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading department analytics...');
     }
     return TabBarView(
       children: [
@@ -400,26 +411,25 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
   }
 
   Widget _statRow(List<(String, int)> stats) {
-    return Row(
-      children: [
-        for (final (label, value) in stats) ...[
-          Expanded(
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  children: [
-                    Text('$value',
-                        style: Theme.of(context).textTheme.titleLarge),
-                    Text(label, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
+    return Padding(
+      padding: const EdgeInsets.only(top: DagacsSpace.sm),
+      child: AppResponsiveGrid(
+        crossAxisCount: 2,
+        gap: DagacsSpace.sm,
+        children: [
+          for (final (label, value) in stats)
+            AppCard(
+              padding: const EdgeInsets.symmetric(vertical: DagacsSpace.md),
+              child: Column(
+                children: [
+                  Text('$value', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: DagacsSpace.xs),
+                  Text(label, style: Theme.of(context).textTheme.bodySmall),
+                ],
               ),
             ),
-          ),
-          if (stats.last != (label, value)) const SizedBox(width: 8),
         ],
-      ],
+      ),
     );
   }
 

@@ -39,16 +39,6 @@ class _AcademicSessionFormDialogState extends State<_AcademicSessionFormDialog> 
       TextEditingController(text: widget.initial?.name ?? '');
   late final TextEditingController _code =
       TextEditingController(text: widget.initial?.code ?? '');
-  late final TextEditingController _semester =
-      TextEditingController(text: widget.initial?.semester ?? '');
-  late final TextEditingController _durationHours =
-      TextEditingController(
-          text: widget.initial?.durationHours?.toString() ?? '');
-  late final TextEditingController _lecturePeriods =
-      TextEditingController(
-          text: widget.initial?.lecturePeriods?.toString() ?? '');
-  late final TextEditingController _credits =
-      TextEditingController(text: widget.initial?.credits?.toString() ?? '');
   late final TextEditingController _description =
       TextEditingController(text: widget.initial?.description ?? '');
 
@@ -73,10 +63,6 @@ class _AcademicSessionFormDialogState extends State<_AcademicSessionFormDialog> 
   void dispose() {
     _name.dispose();
     _code.dispose();
-    _semester.dispose();
-    _durationHours.dispose();
-    _lecturePeriods.dispose();
-    _credits.dispose();
     _description.dispose();
     super.dispose();
   }
@@ -111,22 +97,12 @@ class _AcademicSessionFormDialogState extends State<_AcademicSessionFormDialog> 
     }
   }
 
-  String? _intValidator(String? v, String label) {
-    if (v == null || v.trim().isEmpty) return '$label is required';
-    if (int.tryParse(v.trim()) == null) return '$label must be a number';
-    if (int.parse(v.trim()) < 0) return '$label must be positive';
-    return null;
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_programId == null) return;
     final request = AcademicSessionRequest(
       name: _name.text.trim(),
       code: _code.text.trim(),
-      semester: _semester.text.trim(),
-      durationHours: int.parse(_durationHours.text.trim()),
-      lecturePeriods: int.parse(_lecturePeriods.text.trim()),
-      credits: int.parse(_credits.text.trim()),
       programId: _programId!,
       description: _description.text.trim().isEmpty
           ? null
@@ -211,35 +187,6 @@ class _AcademicSessionFormDialogState extends State<_AcademicSessionFormDialog> 
             controller: _code,
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Code is required' : null,
-          ),
-          AppFormTextField(
-            key: const Key('field-semester'),
-            label: 'Semester',
-            controller: _semester,
-            validator: (v) => (v == null || v.trim().isEmpty)
-                ? 'Semester is required'
-                : null,
-          ),
-          AppFormTextField(
-            key: const Key('field-durationHours'),
-            label: 'Duration (hours)',
-            controller: _durationHours,
-            keyboardType: TextInputType.number,
-            validator: (v) => _intValidator(v, 'Duration'),
-          ),
-          AppFormTextField(
-            key: const Key('field-lecturePeriods'),
-            label: 'Lecture periods',
-            controller: _lecturePeriods,
-            keyboardType: TextInputType.number,
-            validator: (v) => _intValidator(v, 'Lecture periods'),
-          ),
-          AppFormTextField(
-            key: const Key('field-credits'),
-            label: 'Credits',
-            controller: _credits,
-            keyboardType: TextInputType.number,
-            validator: (v) => _intValidator(v, 'Credits'),
           ),
           AppFormDropdown<int>(
             key: const Key('field-program'),

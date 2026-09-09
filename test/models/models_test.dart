@@ -84,10 +84,6 @@ void main() {
         'id': 1,
         'name': '2026-27',
         'code': '2026-27',
-        'semester': 'Semester 1',
-        'durationHours': 40,
-        'lecturePeriods': 30,
-        'credits': 20,
         'description': 'desc',
         'programId': 1,
         'program': {'id': 1, 'name': 'M.Tech CSE', 'code': 'MTCSE'},
@@ -95,7 +91,6 @@ void main() {
       expect(s.id, 1);
       expect(s.programId, 1);
       expect(s.program?.name, 'M.Tech CSE');
-      expect(s.durationHours, 40);
     });
   });
 
@@ -151,20 +146,22 @@ void main() {
   });
 
   group('Subject', () {
-    test('parses flat DTO with string department (no parent FK)', () {
+    test('parses with departmentId and nested department', () {
       final s = Subject.fromJson({
         'id': 1,
         'code': 'CS101',
         'name': 'Data Structures',
         'description': 'desc',
         'creditHours': '3',
-        'department': 'Computer Science',
+        'departmentId': 1,
+        'department': {'id': 1, 'name': 'Computer Science', 'code': 'CS'},
         'status': 'ACTIVE',
       });
       expect(s.code, 'CS101');
       expect(s.name, 'Data Structures');
       expect(s.creditHours, '3');
-      expect(s.department, 'Computer Science');
+      expect(s.departmentId, 1);
+      expect(s.department?.name, 'Computer Science');
       expect(s.status, 'ACTIVE');
     });
   });

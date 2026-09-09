@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/attendance_session_create_request.dart';
 import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
+import '../core/theme/dagacs_theme.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// Form for creating a new attendance session.
 ///
@@ -108,121 +110,119 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Create Session')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Card(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'Enter subject and section IDs manually. These can be '
-                    'found from existing session data or admin records.',
-                    style: TextStyle(fontSize: 13),
+        padding: const EdgeInsets.all(DagacsSpace.lg),
+        child: AppConstrainedMax(
+          maxWidth: 640,
+          child: Form(
+            key: _formKey,
+            child: AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const AppPageHeader(
+                    icon: Icons.event_available_outlined,
+                    title: 'Create attendance session',
+                    subtitle: 'Record a class before marking attendance.',
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _subjectIdController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Subject ID',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Subject ID is required';
-                  }
-                  if (int.tryParse(v.trim()) == null) {
-                    return 'Must be a number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _sectionIdController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Section ID',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Section ID is required';
-                  }
-                  if (int.tryParse(v.trim()) == null) {
-                    return 'Must be a number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _lecturePeriodController,
-                decoration: const InputDecoration(
-                  labelText: 'Lecture Period',
-                  hintText: 'e.g. 1st Period',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Lecture period is required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _dateController,
-                onTap: _pickDate,
-                decoration: InputDecoration(
-                  labelText: 'Date',
-                  hintText: 'YYYY-MM-DD',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: const Tooltip(
-                    message: 'Pick date',
-                    child: Icon(Icons.calendar_today),
+                  Container(
+                    padding: const EdgeInsets.all(DagacsSpace.md),
+                    decoration: BoxDecoration(
+                      color: DagacsColors.infoBg,
+                      borderRadius: BorderRadius.circular(DagacsRadius.md),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, color: DagacsColors.info),
+                        SizedBox(width: DagacsSpace.sm),
+                        Expanded(
+                          child: Text(
+                            'Subject and section selection requires a teaching-assignment API, which is not available in this app. Enter subject and section IDs supplied by your administrator.',
+                            style: TextStyle(fontSize: 13, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Date is required';
-                  }
-                  return null;
-                },
+                  const SizedBox(height: DagacsSpace.xl),
+                  AppFormTextField(
+                    label: 'Subject ID',
+                    controller: _subjectIdController,
+                    keyboardType: TextInputType.number,
+                    prefixIcon: Icons.book_outlined,
+                    validator: _idValidator('Subject ID'),
+                  ),
+                  AppFormTextField(
+                    label: 'Section ID',
+                    controller: _sectionIdController,
+                    keyboardType: TextInputType.number,
+                    prefixIcon: Icons.groups_outlined,
+                    validator: _idValidator('Section ID'),
+                  ),
+                  AppFormTextField(
+                    label: 'Lecture period',
+                    controller: _lecturePeriodController,
+                    hintText: 'For example, 1st Period',
+                    prefixIcon: Icons.schedule_outlined,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Lecture period is required'
+                        : null,
+                  ),
+                  AppFormTextField(
+                    label: 'Date',
+                    controller: _dateController,
+                    hintText: 'YYYY-MM-DD',
+                    prefixIcon: Icons.calendar_today_outlined,
+                    suffixIcon: IconButton(
+                      tooltip: 'Choose date',
+                      icon: const Icon(Icons.calendar_month_outlined),
+                      onPressed: _pickDate,
+                    ),
+                    onTap: _pickDate,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Date is required'
+                        : null,
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: DagacsSpace.xs),
+                    Text(_error!,
+                        style: const TextStyle(
+                            color: DagacsColors.error, fontSize: 13)),
+                  ],
+                  const SizedBox(height: DagacsSpace.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _submit,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.add_task_outlined),
+                          const SizedBox(width: DagacsSpace.sm),
+                          Text(_isLoading ? 'Creating…' : 'Create session'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13)),
-                ),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Create Session'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
+
+  String? Function(String?) _idValidator(String field) => (value) {
+        if (value == null || value.trim().isEmpty) return '$field is required';
+        if (int.tryParse(value.trim()) == null) return '$field must be a number';
+        return null;
+      };
 }

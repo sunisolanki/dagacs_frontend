@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/student_profile.dart';
 import '../network/api_exception.dart';
 import '../repositories/student_profile_repository.dart';
+import '../core/theme/dagacs_theme.dart';
+import '../widgets/dagacs_widgets.dart';
 
 /// Read-only academic profile of the authenticated student (M5.1).
 ///
@@ -67,36 +69,25 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingState(message: 'Loading your profile...');
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
 
     final profile = _profile;
     if (profile == null) {
-      return const Center(child: Text('Profile unavailable'));
+      return const AppEmptyState(
+        icon: Icons.person_off_outlined,
+        message: 'Your profile is not available yet.',
+      );
     }
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(DagacsSpace.lg),
         children: [
           _buildHeader(profile),
           const SizedBox(height: 16),
@@ -146,7 +137,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       children: [
         CircleAvatar(
           radius: 40,
-          backgroundColor: const Color(0xFF1A73E8),
+          backgroundColor: DagacsColors.brandPrimary,
           foregroundImage: hasPhoto ? NetworkImage(photoUrl) : null,
           child: hasPhoto
               ? null
@@ -167,7 +158,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           Text(
             profile.rollNumber!,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey),
+                color: DagacsColors.textSecondary),
           ),
       ],
     );
@@ -175,7 +166,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Widget _buildRow(IconData icon, String label, String? value) {
     return ListTile(
-      leading: Icon(icon, color: const Color(0xFF1A73E8)),
+      leading: Icon(icon, color: DagacsColors.brandPrimary),
       title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
       trailing: Text(
         value ?? '-',
