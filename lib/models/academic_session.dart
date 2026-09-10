@@ -1,3 +1,4 @@
+import 'department.dart';
 import 'program.dart';
 
 /// Matches backend `AcademicSessionDTO`.
@@ -37,6 +38,49 @@ class AcademicSession {
       updatedAt: json['updatedAt'] as String?,
     );
   }
+}
+
+/// One consolidated, human-readable label for an Academic Session:
+/// `{session name} — {program name} — {department name}`.
+///
+/// Some backend responses only embed the session name (and at best a shallow
+/// program); [programsById] supplies the program/department detail the caller
+/// fetched via `GET /admin/programs` so the full context can be shown without
+/// faking data. Missing parts degrade to explicit `* unavailable` markers.
+String academicSessionContextLabel(
+  AcademicSession? session, {
+  Map<int, Program>? programsById,
+}) {
+  final sessionName = session?.name?.trim();
+  if (session == null || sessionName == null || sessionName.isEmpty) {
+    return 'Academic session unavailable';
+  }
+  final Program? program = session.program ??
+      ((session.programId != null && programsById != null)
+          ? programsById[session.programId]
+          : null);
+  String? programName;
+  String? departmentName;
+  if (program == null ||
+      (program.name?.trim().isEmpty ?? false)) {
+    programName = 'Program unavailable';
+  } else {
+    programName = program.name;
+  }
+  if (program != null) {
+    final Program? richer =
+        (program.id != null && programsById != null)
+            ? programsById[program.id]
+            : null;
+    final Department? department = program.department ?? richer?.department;
+    final deptName = department?.name?.trim();
+    departmentName = (deptName == null || deptName.isEmpty)
+        ? 'Department unavailable'
+        : deptName;
+  } else {
+    departmentName = 'Department unavailable';
+  }
+  return '$sessionName — $programName — $departmentName';
 }
 
 /// Mutable fields sent for POST/PUT `/api/admin/academic-sessions`.

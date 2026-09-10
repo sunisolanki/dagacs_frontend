@@ -34,8 +34,15 @@ class _CapturingRepo extends MasterDataRepository {
       const [Department(id: 1, name: 'Computer Science', code: 'CS')];
 
   @override
-  Future<List<Program>> getPrograms() async =>
-      const [Program(id: 1, name: 'B.Tech CSE', code: 'CS')];
+  Future<List<Program>> getPrograms() async => const [
+        Program(
+          id: 1,
+          name: 'B.Tech CSE',
+          code: 'CS',
+          department:
+              Department(id: 1, name: 'Computer Science & Engineering', code: 'CS'),
+        )
+      ];
 
   @override
   Future<List<AcademicSession>> getAcademicSessions() async => const [
@@ -203,7 +210,8 @@ void main() {
     final repo = _CapturingRepo();
     await _open(tester, repo, (c) => showSemesterForm(c, repo));
 
-    expect(find.text('2026-27 Sem 1 — B.Tech CSE'), findsOneWidget);
+    expect(find.text('2026-27 Sem 1 — B.Tech CSE — Computer Science & Engineering'),
+        findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('field-name')), 'Sem 2');
     await tester.enterText(find.byKey(const Key('field-code')), 'S2');
@@ -214,6 +222,10 @@ void main() {
     expect(repo.semesterReq!.code, 'S2');
     expect(repo.semesterReq!.year, 2026);
     expect(repo.semesterReq!.academicSessionId, 1);
+    expect(
+      repo.semesterReq!.toJson().keys.toSet(),
+      {'name', 'code', 'year', 'academicSessionId'},
+    );
   });
 
   testWidgets('batch form maps fields, year and academicSessionId',

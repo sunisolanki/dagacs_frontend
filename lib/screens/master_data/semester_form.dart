@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academic_session.dart';
+import '../../models/program.dart';
 import '../../models/semester.dart';
 import '../../network/api_exception.dart';
 import '../../repositories/master_data_repository.dart';
@@ -49,6 +50,7 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
   String? _submitError;
 
   List<AcademicSession> _sessions = const [];
+  Map<int, Program> _programsById = const {};
 
   bool get _isEdit => widget.initial != null;
 
@@ -72,13 +74,20 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
       _referencesError = null;
     });
     try {
-      final sessions = await widget.repository.getAcademicSessions();
+      final results = await Future.wait([
+        widget.repository.getAcademicSessions(),
+        widget.repository.getPrograms(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _sessions = sessions;
+        _sessions = results[0] as List<AcademicSession>;
+        _programsById = {
+          for (final program in results[1] as List<Program>)
+            if (program.id != null) program.id!: program,
+        };
         _academicSessionId = widget.initial?.academicSession?.id ??
             widget.initial?.academicSessionId ??
-            sessions.firstOrNull?.id;
+            _sessions.firstOrNull?.id;
         _loadingReferences = false;
       });
     } on ApiException {
@@ -104,12 +113,8 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
     return null;
   }
 
-  String _sessionLabel(AcademicSession s) {
-    final programName = s.program?.name;
-    final sessionName = s.name ?? 'Unknown';
-    if (programName == null || programName.isEmpty) return sessionName;
-    return '$sessionName — $programName';
-  }
+  String _sessionLabel(AcademicSession s) =>
+      academicSessionContextLabel(s, programsById: _programsById);
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -203,9 +208,14 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
             items: _sessions
                 .where((s) => s.id != null)
                 .map((s) => DropdownMenuItem(
-                    value: s.id,
-                    child: Text(_sessionLabel(s)),
-                ))
+                      value: s.id,
+                      child: Text(
+                        _sessionLabel(s),
+                        maxLines: 2,
+                        softWrap: true,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
                 .toList(),
             onChanged: (v) => setState(() => _academicSessionId = v),
             validator: (v) => v == null ? 'Academic Session is required' : null,
