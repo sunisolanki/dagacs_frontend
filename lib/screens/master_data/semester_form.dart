@@ -104,6 +104,13 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
     return null;
   }
 
+  String _sessionLabel(AcademicSession s) {
+    final programName = s.program?.name;
+    final sessionName = s.name ?? 'Unknown';
+    if (programName == null || programName.isEmpty) return sessionName;
+    return '$sessionName — $programName';
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final request = SemesterRequest(
@@ -145,26 +152,16 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
 
   Widget _buildContent() {
     if (_loadingReferences) {
-      return const SizedBox(
-          height: 240, child: Center(child: CircularProgressIndicator()));
+      return SizedBox(
+          height: 240,
+          child: AppLoadingState(
+              message: 'Loading Academic Session reference data...'));
     }
     if (_referencesError != null) {
       return SizedBox(
         height: 240,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_referencesError!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                    onPressed: _loadReferences, child: const Text('Retry')),
-              ],
-            ),
-          ),
-        ),
+        child: AppErrorState(
+            message: _referencesError!, onRetry: _loadReferences),
       );
     }
     return Form(
@@ -205,8 +202,10 @@ class _SemesterFormDialogState extends State<_SemesterFormDialog> {
             value: _academicSessionId,
             items: _sessions
                 .where((s) => s.id != null)
-                .map((s) =>
-                    DropdownMenuItem(value: s.id, child: Text(s.name ?? 'Unknown')))
+                .map((s) => DropdownMenuItem(
+                    value: s.id,
+                    child: Text(_sessionLabel(s)),
+                ))
                 .toList(),
             onChanged: (v) => setState(() => _academicSessionId = v),
             validator: (v) => v == null ? 'Academic Session is required' : null,

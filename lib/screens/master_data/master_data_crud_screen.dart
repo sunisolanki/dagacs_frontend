@@ -50,6 +50,7 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
   List<T> _items = const [];
   bool _loading = true;
   String? _error;
+  bool _deleting = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -113,6 +114,7 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
   }
 
   Future<void> _confirmDelete(T item) async {
+    if (_deleting) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AppConfirmDialog(
@@ -123,6 +125,7 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    _deleting = true;
     try {
       await widget.remove(item);
       if (!mounted) return;
@@ -143,6 +146,8 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not delete. Please try again.')),
       );
+    } finally {
+      _deleting = false;
     }
   }
 
@@ -162,7 +167,7 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const AppLoadingState(message: 'Loading...');
+      return AppLoadingState(message: 'Loading ${widget.title}...');
     }
     if (_error != null) {
       return AppErrorState(message: _error!, onRetry: _load);
@@ -189,92 +194,105 @@ class _MasterDataCrudScreenState<T> extends State<MasterDataCrudScreen<T>> {
         itemCount: visible.isEmpty ? 3 : visible.length + 2,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return AppPageHeader(
-              icon: widget.icon,
-              subtitle: 'Search, add, edit or remove ${widget.title.toLowerCase()}.',
+            return AppConstrainedMax(
+              maxWidth: 1120,
+              child: AppPageHeader(
+                icon: widget.icon,
+                subtitle:
+                    'Search, add, edit or remove ${widget.title.toLowerCase()}.',
+              ),
             );
           }
           if (index == 1) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(
-                DagacsSpace.lg,
-                0,
-                DagacsSpace.lg,
-                DagacsSpace.lg,
-              ),
-              child: AppSearchField(
-                key: Key('${widget.entityKey}-search'),
-                controller: _searchController,
-                hintText: 'Search ${widget.title.toLowerCase()}',
-                onChanged: (value) => setState(() => _searchQuery = value),
+            return AppConstrainedMax(
+              maxWidth: 1120,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  DagacsSpace.lg,
+                  0,
+                  DagacsSpace.lg,
+                  DagacsSpace.lg,
+                ),
+                child: AppSearchField(
+                  key: Key('${widget.entityKey}-search'),
+                  controller: _searchController,
+                  hintText: 'Search ${widget.title.toLowerCase()}',
+                  onChanged: (value) => setState(() => _searchQuery = value),
+                ),
               ),
             );
           }
           if (visible.isEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(top: DagacsSpace.xxxl),
-              child: AppEmptyState(
-                icon: Icons.search_off_outlined,
-                message: 'No ${widget.title.toLowerCase()} match your search.',
+            return AppConstrainedMax(
+              maxWidth: 1120,
+              child: Padding(
+                padding: const EdgeInsets.only(top: DagacsSpace.xxxl),
+                child: AppEmptyState(
+                  icon: Icons.search_off_outlined,
+                  message: 'No ${widget.title.toLowerCase()} match your search.',
+                ),
               ),
             );
           }
           final item = visible[index - 2];
           final subtitle = widget.subtitleOf?.call(item);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),
-            child: AppCard(
-              key: Key('${widget.entityKey}-tile-${widget.idOf(item)}'),
-              onTap: () => _openEdit(item),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
-              child: Row(
-                children: [
-                  AppIconBadge(icon: widget.icon, size: 46),
-                  const SizedBox(width: DagacsSpace.lg),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.titleOf(item),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        if (subtitle == null || subtitle.isEmpty)
-                          const SizedBox.shrink()
-                        else ...[
-                          const SizedBox(height: 4),
+          return AppConstrainedMax(
+            maxWidth: 1120,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),
+              child: AppCard(
+                key: Key('${widget.entityKey}-tile-${widget.idOf(item)}'),
+                onTap: () => _openEdit(item),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    AppIconBadge(icon: widget.icon, size: 46),
+                    const SizedBox(width: DagacsSpace.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            subtitle,
-                            maxLines: 2,
+                            widget.titleOf(item),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(context).textTheme.titleSmall,
                           ),
+                          if (subtitle == null || subtitle.isEmpty)
+                            const SizedBox.shrink()
+                          else ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: DagacsSpace.sm),
-                  IconButton(
-                    key: Key(
-                        '${widget.entityKey}-edit-${widget.idOf(item)}'),
-                    tooltip: 'Edit',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _openEdit(item),
-                  ),
-                  IconButton(
-                    key: Key(
-                        '${widget.entityKey}-delete-${widget.idOf(item)}'),
-                    tooltip: 'Delete',
-                    icon: const Icon(Icons.delete_outline,
-                        color: DagacsColors.error),
-                    onPressed: () => _confirmDelete(item),
-                  ),
-                ],
+                    const SizedBox(width: DagacsSpace.sm),
+                    IconButton(
+                      key: Key(
+                          '${widget.entityKey}-edit-${widget.idOf(item)}'),
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _openEdit(item),
+                    ),
+                    IconButton(
+                      key: Key(
+                          '${widget.entityKey}-delete-${widget.idOf(item)}'),
+                      tooltip: 'Delete',
+                      icon: const Icon(Icons.delete_outline,
+                          color: DagacsColors.error),
+                      onPressed: () => _confirmDelete(item),
+                    ),
+                  ],
+                ),
               ),
             ),
           );

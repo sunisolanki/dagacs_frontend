@@ -163,26 +163,16 @@ class _SubjectFormDialogState extends State<_SubjectFormDialog> {
 
   Widget _buildContent() {
     if (_loadingReferences) {
-      return const SizedBox(
-          height: 240, child: Center(child: CircularProgressIndicator()));
+      return SizedBox(
+          height: 240,
+          child: AppLoadingState(
+              message: 'Loading Department reference data...'));
     }
     if (_referencesError != null) {
       return SizedBox(
         height: 240,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(_referencesError!, textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                    onPressed: _loadReferences, child: const Text('Retry')),
-              ],
-            ),
-          ),
-        ),
+        child: AppErrorState(
+            message: _referencesError!, onRetry: _loadReferences),
       );
     }
     return Form(

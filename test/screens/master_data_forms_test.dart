@@ -38,8 +38,14 @@ class _CapturingRepo extends MasterDataRepository {
       const [Program(id: 1, name: 'B.Tech CSE', code: 'CS')];
 
   @override
-  Future<List<AcademicSession>> getAcademicSessions() async =>
-      const [AcademicSession(id: 1, name: '2026-27 Sem 1', code: 'S1')];
+  Future<List<AcademicSession>> getAcademicSessions() async => const [
+        AcademicSession(
+          id: 1,
+          name: '2026-27 Sem 1',
+          code: 'S1',
+          program: Program(id: 1, name: 'B.Tech CSE', code: 'CS'),
+        )
+      ];
 
   @override
   Future<List<Batch>> getBatches() async =>
@@ -196,6 +202,8 @@ void main() {
       (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo, (c) => showSemesterForm(c, repo));
+
+    expect(find.text('2026-27 Sem 1 — B.Tech CSE'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('field-name')), 'Sem 2');
     await tester.enterText(find.byKey(const Key('field-code')), 'S2');
