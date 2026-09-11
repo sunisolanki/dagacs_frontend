@@ -26,23 +26,28 @@ class HodRepository {
           startDate: startDate, endDate: endDate);
 
   /// Section-wise attendance summary (latest attendance date semantics).
-  Future<List<HodSectionAttendance>> getSections() =>
-      _list('/hod/sections', HodSectionAttendance.fromJson);
+  Future<List<HodSectionAttendance>> getSections(
+          {DateTime? startDate, DateTime? endDate}) =>
+      _list('/hod/sections', HodSectionAttendance.fromJson,
+          startDate: startDate, endDate: endDate);
 
   /// Subject-wise attendance summary with enrolled student counts.
-  Future<List<HodSubjectAttendance>> getSubjects() =>
-      _list('/hod/subjects', HodSubjectAttendance.fromJson);
+  Future<List<HodSubjectAttendance>> getSubjects(
+          {DateTime? startDate, DateTime? endDate}) =>
+      _list('/hod/subjects', HodSubjectAttendance.fromJson,
+          startDate: startDate, endDate: endDate);
 
   /// Full per-student attendance summary.
-  Future<List<HodStudentAttendance>> getStudents() =>
-      _list('/hod/students', HodStudentAttendance.fromJson);
+  Future<List<HodStudentAttendance>> getStudents(
+          {DateTime? startDate, DateTime? endDate}) =>
+      _list('/hod/students', HodStudentAttendance.fromJson,
+          startDate: startDate, endDate: endDate);
 
   /// Students below the FIXED 75.0% threshold.
-  ///
-  /// The backend performs the `percentage < 75.0` filter; Flutter only
-  /// displays the result.
-  Future<List<HodLowAttendance>> getLowAttendance() =>
-      _list('/hod/low-attendance', HodLowAttendance.fromJson);
+  Future<List<HodLowAttendance>> getLowAttendance(
+          {DateTime? startDate, DateTime? endDate}) =>
+      _list('/hod/low-attendance', HodLowAttendance.fromJson,
+          startDate: startDate, endDate: endDate);
 
   /// Monthly or quarterly attendance rollup for the department.
   Future<List<HodRollup>> getRollups(
@@ -58,8 +63,10 @@ class HodRepository {
   }
 
   /// Correction history visible to the HOD's department.
-  Future<List<HodAuditLogEntry>> getAuditLogs() =>
-      _list('/hod/audit-logs', HodAuditLogEntry.fromJson);
+  Future<List<HodAuditLogEntry>> getAuditLogs(
+          {DateTime? startDate, DateTime? endDate}) =>
+      _list('/hod/audit-logs', HodAuditLogEntry.fromJson,
+          startDate: startDate, endDate: endDate);
 
   // ── Internal helpers ───────────────────────────────────────────
 
@@ -107,9 +114,13 @@ class HodRepository {
   }
 
   Future<List<T>> _list<T>(
-      String path, T Function(Map<String, dynamic>) fromJson) async {
+      String path,
+      T Function(Map<String, dynamic>) fromJson,
+      {DateTime? startDate,
+      DateTime? endDate}) async {
     try {
-      final data = await _client.get(path);
+      final data = await _client.get(_query(path,
+          startDate: startDate, endDate: endDate));
       if (data is! List) {
         throw const ApiException.serverError();
       }

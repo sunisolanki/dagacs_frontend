@@ -77,4 +77,50 @@ class StudentManagementRepository {
       rethrow;
     }
   }
+
+  /// Provisions a STUDENT login account linked by the student's email (M9.5.2).
+  /// 409 if the student already has a login or the email is owned elsewhere.
+  Future<StudentManagement> provisionLogin(
+      int id, StudentLoginPasswordRequest request) async {
+    try {
+      final data =
+          await _client.post('/admin/students/$id/login', body: request.toJson());
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentManagement.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  /// Flips only the linked login's ACTIVE/INACTIVE status (D4 - never the
+  /// student profile).
+  Future<StudentManagement> setLoginStatus(int id, String status) async {
+    try {
+      final data = await _client
+          .patch('/admin/students/$id/login/status', body: {'status': status});
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentManagement.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  /// Resets the linked login's password; the raw password is never returned.
+  Future<StudentManagement> setLoginPassword(
+      int id, StudentLoginPasswordRequest request) async {
+    try {
+      final data = await _client
+          .put('/admin/students/$id/login/password', body: request.toJson());
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentManagement.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
 }

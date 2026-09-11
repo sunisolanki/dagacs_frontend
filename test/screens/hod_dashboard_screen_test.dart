@@ -15,18 +15,28 @@ class _FakeHodRepository extends HodRepository {
   _FakeHodRepository();
 
   Future<HodDashboard> Function()? onGetDashboard;
-  Future<List<HodSectionAttendance>> Function()? onGetSections;
-  Future<List<HodSubjectAttendance>> Function()? onGetSubjects;
-  Future<List<HodStudentAttendance>> Function()? onGetStudents;
-  Future<List<HodLowAttendance>> Function()? onGetLowAttendance;
+  Future<List<HodSectionAttendance>> Function(DateTime?, DateTime?)? onGetSections;
+  Future<List<HodSubjectAttendance>> Function(DateTime?, DateTime?)? onGetSubjects;
+  Future<List<HodStudentAttendance>> Function(DateTime?, DateTime?)? onGetStudents;
+  Future<List<HodLowAttendance>> Function(DateTime?, DateTime?)? onGetLowAttendance;
   Future<List<HodRollup>> Function(String type)? onGetRollups;
-  Future<List<HodAuditLogEntry>> Function()? onGetAuditLogs;
+  Future<List<HodAuditLogEntry>> Function(DateTime?, DateTime?)? onGetAuditLogs;
 
   String? lastRollupType;
   DateTime? lastDashboardStart;
   DateTime? lastDashboardEnd;
   DateTime? lastRollupStart;
   DateTime? lastRollupEnd;
+  DateTime? lastSectionsStart;
+  DateTime? lastSectionsEnd;
+  DateTime? lastSubjectsStart;
+  DateTime? lastSubjectsEnd;
+  DateTime? lastStudentsStart;
+  DateTime? lastStudentsEnd;
+  DateTime? lastLowStart;
+  DateTime? lastLowEnd;
+  DateTime? lastAuditStart;
+  DateTime? lastAuditEnd;
 
   @override
   Future<HodDashboard> getDashboard(
@@ -37,16 +47,36 @@ class _FakeHodRepository extends HodRepository {
   }
 
   @override
-  Future<List<HodSectionAttendance>> getSections() => onGetSections!();
+  Future<List<HodSectionAttendance>> getSections(
+      {DateTime? startDate, DateTime? endDate}) {
+    lastSectionsStart = startDate;
+    lastSectionsEnd = endDate;
+    return onGetSections!(startDate, endDate);
+  }
 
   @override
-  Future<List<HodSubjectAttendance>> getSubjects() => onGetSubjects!();
+  Future<List<HodSubjectAttendance>> getSubjects(
+      {DateTime? startDate, DateTime? endDate}) {
+    lastSubjectsStart = startDate;
+    lastSubjectsEnd = endDate;
+    return onGetSubjects!(startDate, endDate);
+  }
 
   @override
-  Future<List<HodStudentAttendance>> getStudents() => onGetStudents!();
+  Future<List<HodStudentAttendance>> getStudents(
+      {DateTime? startDate, DateTime? endDate}) {
+    lastStudentsStart = startDate;
+    lastStudentsEnd = endDate;
+    return onGetStudents!(startDate, endDate);
+  }
 
   @override
-  Future<List<HodLowAttendance>> getLowAttendance() => onGetLowAttendance!();
+  Future<List<HodLowAttendance>> getLowAttendance(
+      {DateTime? startDate, DateTime? endDate}) {
+    lastLowStart = startDate;
+    lastLowEnd = endDate;
+    return onGetLowAttendance!(startDate, endDate);
+  }
 
   @override
   Future<List<HodRollup>> getRollups(
@@ -58,7 +88,12 @@ class _FakeHodRepository extends HodRepository {
   }
 
   @override
-  Future<List<HodAuditLogEntry>> getAuditLogs() => onGetAuditLogs!();
+  Future<List<HodAuditLogEntry>> getAuditLogs(
+      {DateTime? startDate, DateTime? endDate}) {
+    lastAuditStart = startDate;
+    lastAuditEnd = endDate;
+    return onGetAuditLogs!(startDate, endDate);
+  }
 }
 
 const _dashboard = HodDashboard(
@@ -143,12 +178,12 @@ _FakeHodRepository _repo({
 }) {
   final repo = _FakeHodRepository();
   repo.onGetDashboard = () async => dashboard;
-  repo.onGetSections = () async => sections;
-  repo.onGetSubjects = () async => subjects;
-  repo.onGetStudents = () async => students;
-  repo.onGetLowAttendance = () async => low;
+  repo.onGetSections = (_, __) async => sections;
+  repo.onGetSubjects = (_, __) async => subjects;
+  repo.onGetStudents = (_, __) async => students;
+  repo.onGetLowAttendance = (_, __) async => low;
   repo.onGetRollups = rollups ?? _rollupsByType;
-  repo.onGetAuditLogs = () async => audit;
+  repo.onGetAuditLogs = (_, __) async => audit;
   return repo;
 }
 
@@ -428,7 +463,7 @@ void main() {
   testWidgets('one failed list endpoint does not break other tabs',
       (tester) async {
     final repo = _repo();
-    repo.onGetLowAttendance = () async => throw const ApiException.network();
+    repo.onGetLowAttendance = (_, __) async => throw const ApiException.network();
 
     await tester.binding.setSurfaceSize(const Size(2000, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));

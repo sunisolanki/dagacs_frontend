@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academic_session.dart';
-import '../../models/batch.dart';
 import '../../models/program.dart';
+import '../../models/subject_offering.dart';
 import '../../repositories/master_data_repository.dart';
-import 'batch_form.dart';
 import 'master_data_crud_screen.dart';
+import 'subject_offering_form.dart';
 
-class BatchListScreen extends StatefulWidget {
-  const BatchListScreen({super.key, required this.repository});
+class SubjectOfferingListScreen extends StatefulWidget {
+  const SubjectOfferingListScreen({super.key, required this.repository});
 
   final MasterDataRepository repository;
 
   @override
-  State<BatchListScreen> createState() => _BatchListScreenState();
+  State<SubjectOfferingListScreen> createState() =>
+      _SubjectOfferingListScreenState();
 }
 
-class _BatchListScreenState extends State<BatchListScreen> {
+class _SubjectOfferingListScreenState extends State<SubjectOfferingListScreen> {
   Map<int, AcademicSession> _sessionsById = const {};
   Map<int, Program> _programsById = const {};
 
@@ -49,43 +50,34 @@ class _BatchListScreenState extends State<BatchListScreen> {
     }
   }
 
-  String? _contextOf(Batch batch) {
-    final shallow = batch.academicSession;
+  String? _contextOf(SubjectOffering offering) {
+    final shallow = offering.semester?.academicSession;
     if (shallow == null) return null;
     final session = _sessionsById[shallow.id] ?? shallow;
     return academicSessionContextLabel(session, programsById: _programsById);
   }
 
-  String? _sectionsOf(Batch batch) {
-    final names = batch.sections
-        .map((s) => s.name?.trim())
-        .where((n) => n != null && n.isNotEmpty)
-        .toList();
-    if (names.isEmpty) return null;
-    return 'Sections: ${names.join(', ')}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    return MasterDataCrudScreen<Batch>(
-      title: 'Batches',
-      entityKey: 'batch',
-      icon: Icons.groups_outlined,
-      addTooltip: 'Add batch',
-      emptyText: 'No batches yet. Use + to add one.',
-      idOf: (b) => b.id!,
-      titleOf: (b) => b.name ?? 'Unknown',
-      subtitleOf: (b) => <String?>[
-        b.batchCode,
-        b.year == null ? null : 'Admission ${b.year}',
-        _contextOf(b),
-        _sectionsOf(b),
+    return MasterDataCrudScreen<SubjectOffering>(
+      title: 'Subject Offerings',
+      entityKey: 'subject-offering',
+      icon: Icons.merge_type_outlined,
+      addTooltip: 'Add subject offering',
+      emptyText: 'No subject offerings yet. Use + to map one.',
+      idOf: (o) => o.id!,
+      titleOf: (o) => o.subject?.name ?? 'Unknown',
+      subtitleOf: (o) => <String?>[
+        o.subject?.code,
+        _contextOf(o),
+        o.semester?.name,
       ].where((v) => v != null && v.isNotEmpty).join(' · '),
-      fetch: widget.repository.getBatches,
-      create: (context) => showBatchForm(context, widget.repository),
+      fetch: widget.repository.getSubjectOfferings,
+      create: (context) =>
+          showSubjectOfferingForm(context, widget.repository),
       edit: (context, item) =>
-          showBatchForm(context, widget.repository, initial: item),
-      remove: (item) => widget.repository.deleteBatch(item.id!),
+          showSubjectOfferingForm(context, widget.repository, initial: item),
+      remove: (item) => widget.repository.deleteSubjectOffering(item.id!),
     );
   }
 }

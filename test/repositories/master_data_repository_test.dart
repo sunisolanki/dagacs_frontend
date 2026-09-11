@@ -4,6 +4,8 @@ import 'package:dagacs_frontend/models/academic_session.dart';
 import 'package:dagacs_frontend/models/department.dart';
 import 'package:dagacs_frontend/models/program.dart';
 import 'package:dagacs_frontend/models/subject.dart';
+import 'package:dagacs_frontend/models/subject_offering.dart';
+import 'package:dagacs_frontend/models/teacher_assignment.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/master_data_repository.dart';
@@ -215,6 +217,178 @@ void main() {
         'duration': '4 years',
         'departmentId': 2,
       });
+    });
+  });
+
+  group('MasterDataRepository.createSubjectOffering', () {
+    test('sends only subjectId/semesterId to admin/subject-offerings',
+        () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response(
+              '{"id":7,"subjectId":4,"semesterId":5,'
+              '"subject":{"id":4,"code":"CS301","name":"DBMS"},'
+              '"semester":{"id":5,"name":"Semester 5","code":"SEM5",'
+              '"academicSessionId":3,"academicSession":'
+              '{"id":3,"name":"2026-27","code":"2026-27"}}}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      final offering = await repo.createSubjectOffering(
+          const SubjectOfferingRequest(subjectId: 4, semesterId: 5));
+      expect(seen.method, 'POST');
+      expect(seen.url.path, '/api/admin/subject-offerings');
+      expect(jsonDecode(seen.body), {'subjectId': 4, 'semesterId': 5});
+      expect(offering.id, 7);
+      expect(offering.subject?.code, 'CS301');
+      expect(offering.semester?.name, 'Semester 5');
+      expect(offering.semester?.academicSession?.name, '2026-27');
+    });
+  });
+
+  group('MasterDataRepository.createTeacherAssignment', () {
+    test('sends exactly teacherId/subjectOfferingId/sectionId to '
+        'admin/teacher-assignments', () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response(
+              '{"id":7,"teacherId":2,"teacherName":"Dr A Sharma",'
+              '"subjectOfferingId":5,"subjectId":4,"subjectCode":"CS301",'
+              '"subjectName":"DBMS","semesterId":3,"semesterName":"Semester 3",'
+              '"sessionId":1,"sessionName":"2026-27","programId":8,'
+              '"programName":"B.Tech CSE","departmentId":2,'
+              '"departmentName":"Computer Science","sectionId":9,'
+              '"sectionCode":"A","sectionName":"Section A","batchId":6,'
+              '"batchCode":"B1"}',
+              201,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      final assignment = await repo.createTeacherAssignment(
+          const TeacherAssignmentRequest(
+              teacherId: 2, subjectOfferingId: 5, sectionId: 9));
+      expect(seen.method, 'POST');
+      expect(seen.url.path, '/api/admin/teacher-assignments');
+      expect(jsonDecode(seen.body),
+          {'teacherId': 2, 'subjectOfferingId': 5, 'sectionId': 9});
+      expect(assignment.id, 7);
+      expect(assignment.teacherName, 'Dr A Sharma');
+      expect(assignment.subjectCode, 'CS301');
+      expect(assignment.sectionName, 'Section A');
+      expect(assignment.batchCode, 'B1');
+    });
+  });
+
+  group('MasterDataRepository.updateTeacherAssignment', () {
+    test('sends PUT to admin/teacher-assignments/{id}', () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response(
+              '{"id":7,"teacherId":2,"subjectOfferingId":5,"sectionId":9}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      await repo.updateTeacherAssignment(
+          7,
+          const TeacherAssignmentRequest(
+              teacherId: 2, subjectOfferingId: 5, sectionId: 9));
+      expect(seen.method, 'PUT');
+      expect(seen.url.path, '/api/admin/teacher-assignments/7');
+      expect(jsonDecode(seen.body),
+          {'teacherId': 2, 'subjectOfferingId': 5, 'sectionId': 9});
+    });
+  });
+
+  group('MasterDataRepository.deleteTeacherAssignment', () {
+    test('sends DELETE to admin/teacher-assignments/{id}', () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response('', 204);
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      await repo.deleteTeacherAssignment(7);
+      expect(seen.method, 'DELETE');
+      expect(seen.url.path, '/api/admin/teacher-assignments/7');
+    });
+  });
+
+  group('MasterDataRepository.getTeacherAssignments', () {
+    test('GETs admin/teacher-assignments and parses the full list', () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response(
+              '[{"id":7,"teacherId":2,"teacherName":"Dr A Sharma",'
+              '"teacherEmail":"a@college.edu",'
+              '"subjectOfferingId":5,"subjectId":4,"subjectCode":"CS301",'
+              '"subjectName":"DBMS","semesterId":3,"semesterName":"Semester 3",'
+              '"sessionId":1,"sessionName":"2026-27","programId":8,'
+              '"programName":"B.Tech CSE","departmentId":2,'
+              '"departmentName":"Computer Science","sectionId":9,'
+              '"sectionCode":"A","sectionName":"Section A","batchId":6,'
+              '"batchCode":"B1","createdAt":"2026-09-01T10:00:00Z",'
+              '"updatedAt":"2026-09-01T10:00:00Z"}]',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      final list = await repo.getTeacherAssignments();
+      expect(seen.method, 'GET');
+      expect(seen.url.path, '/api/admin/teacher-assignments');
+      expect(list, hasLength(1));
+      expect(list.single.teacherEmail, 'a@college.edu');
+    });
+  });
+
+  group('MasterDataRepository.getTeachers', () {
+    test('GETs admin/teachers and parses Teacher rows', () async {
+      late http.Request seen;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seen = req;
+          return http.Response(
+              '[{"id":2,"email":"a@college.edu","fullName":"Dr A Sharma",'
+              '"designation":"Professor","status":"ACTIVE",'
+              '"departmentId":2,"departmentName":"Computer Science"}]',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = MasterDataRepository(client);
+      final list = await repo.getTeachers();
+      expect(seen.method, 'GET');
+      expect(seen.url.path, '/api/admin/teachers');
+      expect(list, hasLength(1));
+      expect(list.single.fullName, 'Dr A Sharma');
+      expect(list.single.designation, 'Professor');
     });
   });
 

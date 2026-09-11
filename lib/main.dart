@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/navigation/navigator.dart';
 import 'core/theme/dagacs_theme.dart';
 import 'core/session/session_controller.dart';
+import 'models/teacher_assignment.dart';
 import 'network/api_client.dart';
 import 'repositories/attendance_repository.dart';
 import 'repositories/auth_repository.dart';
@@ -11,6 +12,8 @@ import 'repositories/master_data_repository.dart';
 import 'repositories/report_repository.dart';
 import 'repositories/student_profile_repository.dart';
 import 'repositories/student_management_repository.dart';
+import 'repositories/teacher_management_repository.dart';
+import 'repositories/teacher_repository.dart';
 import 'screens/attendance_session_list_screen.dart';
 import 'screens/create_session_screen.dart';
 import 'screens/hod_dashboard_screen.dart';
@@ -19,17 +22,22 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/mark_attendance_screen.dart';
 import 'screens/master_data/academic_session_list_screen.dart';
+import 'screens/master_data/assignment_list_screen.dart';
 import 'screens/master_data/batch_list_screen.dart';
 import 'screens/master_data/department_list_screen.dart';
 import 'screens/master_data/program_list_screen.dart';
 import 'screens/master_data/section_list_screen.dart';
 import 'screens/master_data/semester_list_screen.dart';
 import 'screens/master_data/subject_list_screen.dart';
+import 'screens/master_data/subject_offering_list_screen.dart';
+import 'screens/master_data/teacher_list_screen.dart';
 import 'screens/master_data_screen.dart';
+import 'screens/not_found_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/student_attendance_screen.dart';
 import 'screens/student_profile_screen.dart';
 import 'screens/student_management_screen.dart';
+import 'screens/teacher_classes_screen.dart';
 import 'screens/teacher_reports_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -59,6 +67,10 @@ class AppDependencies {
       StudentProfileRepository(apiClient);
   static final StudentManagementRepository studentManagementRepository =
       StudentManagementRepository(apiClient);
+  static final TeacherRepository teacherRepository =
+      TeacherRepository(apiClient);
+  static final TeacherManagementRepository teacherManagementRepository =
+      TeacherManagementRepository(apiClient);
   static final SessionController session =
       SessionController(authRepository);
 }
@@ -99,6 +111,8 @@ class DAGACSApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (_) => MasterDataScreen(
                     repository: AppDependencies.masterDataRepository,
+                    teacherManagementRepository:
+                        AppDependencies.teacherManagementRepository,
                     session: AppDependencies.session));
           case AppRoutes.masterDataDepartments:
             return MaterialPageRoute(
@@ -128,18 +142,47 @@ class DAGACSApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (_) => SubjectListScreen(
                     repository: AppDependencies.masterDataRepository));
+          case AppRoutes.masterDataSubjectOfferings:
+            return MaterialPageRoute(
+                builder: (_) => SubjectOfferingListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case AppRoutes.masterDataTeacherAssignments:
+            return MaterialPageRoute(
+                builder: (_) => TeacherAssignmentListScreen(
+                    repository: AppDependencies.masterDataRepository));
+          case AppRoutes.masterDataTeachers:
+            return MaterialPageRoute(
+                builder: (_) => TeacherListScreen(
+                    repository: AppDependencies.teacherManagementRepository,
+                    masterDataRepository:
+                        AppDependencies.masterDataRepository));
           case AppRoutes.teacherAttendance:
             return MaterialPageRoute(
                 builder: (_) => AttendanceSessionListScreen(
                     attendanceRepository:
                         AppDependencies.attendanceRepository));
           case AppRoutes.createSession:
+            final assignment = settings.arguments;
             return MaterialPageRoute(
                 builder: (_) => CreateSessionScreen(
                     attendanceRepository:
-                        AppDependencies.attendanceRepository));
+                        AppDependencies.attendanceRepository,
+                    teacherRepository: AppDependencies.teacherRepository,
+                    preselectedAssignment: assignment is TeacherAssignment
+                        ? assignment
+                        : null));
+          case AppRoutes.teacherClasses:
+            return MaterialPageRoute(
+                builder: (_) => TeacherClassesScreen(
+                    teacherRepository: AppDependencies.teacherRepository));
           case AppRoutes.markAttendance:
-            final sessionId = settings.arguments as int;
+            final sessionId = settings.arguments is int
+                ? settings.arguments as int
+                : null;
+            if (sessionId == null) {
+              return MaterialPageRoute(
+                  builder: (_) => const NotFoundScreen());
+            }
             return MaterialPageRoute(
                 builder: (_) => MarkAttendanceScreen(
                     sessionId: sessionId,
@@ -175,7 +218,7 @@ class DAGACSApp extends StatelessWidget {
                     masterDataRepository:
                         AppDependencies.masterDataRepository));
           default:
-            return MaterialPageRoute(builder: (_) => const SizedBox());
+            return MaterialPageRoute(builder: (_) => const NotFoundScreen());
         }
       },
     );

@@ -26,6 +26,13 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   int? lastStatusId;
   String? lastStatus;
 
+  int? lastProvisionId;
+  String? lastProvisionPassword;
+  int? lastLoginStatusId;
+  String? lastLoginStatus;
+  int? lastPasswordId;
+  String? lastPassword;
+
   @override
   Future<List<StudentManagement>> getStudents() async {
     if (getStudentsError != null) throw getStudentsError!;
@@ -58,6 +65,32 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
     lastStatusId = id;
     lastStatus = status;
     return const StudentManagement(id: 1, status: 'INACTIVE');
+  }
+
+  @override
+  Future<StudentManagement> provisionLogin(
+      int id, StudentLoginPasswordRequest request) async {
+    lastProvisionId = id;
+    lastProvisionPassword = request.password;
+    return const StudentManagement(
+        id: 1, loginLinked: true, loginStatus: 'ACTIVE');
+  }
+
+  @override
+  Future<StudentManagement> setLoginStatus(int id, String status) async {
+    lastLoginStatusId = id;
+    lastLoginStatus = status;
+    return const StudentManagement(
+        id: 1, loginLinked: true, loginStatus: 'INACTIVE');
+  }
+
+  @override
+  Future<StudentManagement> setLoginPassword(
+      int id, StudentLoginPasswordRequest request) async {
+    lastPasswordId = id;
+    lastPassword = request.password;
+    return const StudentManagement(
+        id: 1, loginLinked: true, loginStatus: 'ACTIVE');
   }
 }
 
@@ -156,7 +189,7 @@ void main() {
     expect(find.textContaining('Computer Science'), findsOneWidget);
     expect(find.text('ACTIVE'), findsOneWidget);
     expect(find.text('INACTIVE'), findsOneWidget);
-    expect(find.byKey(const Key('toggle-status-1')), findsOneWidget);
+    expect(find.text('NO LOGIN'), findsNWidgets(2));
   });
 
   testWidgets(
@@ -239,7 +272,9 @@ void main() {
     await tester.enterText(find.byKey(const Key('student-search')), 'rahul');
     await tester.pump();
 
-    await tester.tap(find.byKey(const Key('toggle-status-1')));
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-toggle-status')));
     await tester.pumpAndSettle();
     expect(repo.lastStatusId, 1);
     expect(repo.lastStatus, 'INACTIVE');
@@ -341,7 +376,7 @@ void main() {
     expect(repo.lastCreateRequest, isNull);
   });
 
-  testWidgets('toggle status from list calls setStudentStatus',
+  testWidgets('activate/inactivate is driven from the detail dialog',
       (tester) async {
     _bigViewport(tester);
     final repo = _FakeStudentManagementRepository()
@@ -349,7 +384,11 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('toggle-status-1')));
+    expect(find.byKey(const Key('toggle-status-1')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-toggle-status')));
     await tester.pumpAndSettle();
 
     expect(repo.lastStatusId, 1);
@@ -426,5 +465,134 @@ void main() {
     expect(find.byKey(const Key('admin-students-tile')), findsNothing);
     expect(find.text('My Profile'), findsOneWidget);
     expect(find.text('Manage Students'), findsNothing);
+  });
+
+  testWidgets('list shows login badges for linked and unlinked students',
+      (tester) async {
+    _bigViewport(tester);
+    const linkedActive = StudentManagement(
+        id: 3,
+        rollNumber: '2201CE003',
+        name: 'Zoya',
+        status: 'ACTIVE',
+        loginLinked: true,
+        loginStatus: 'ACTIVE');
+    const linkedInactive = StudentManagement(
+        id: 4,
+        rollNumber: '2201CE004',
+        name: 'Arjun',
+        status: 'ACTIVE',
+        loginLinked: true,
+        loginStatus: 'INACTIVE');
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active, linkedActive, linkedInactive];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('NO LOGIN'), findsOneWidget);
+    expect(find.text('LOGIN ACTIVE'), findsOneWidget);
+    expect(find.text('LOGIN INACTIVE'), findsOneWidget);
+  });
+
+  testWidgets(
+      'detail of an unlinked student offers Create Login which provisions',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Linked'), findsOneWidget);
+    expect(find.text('No'), findsOneWidget);
+    expect(find.byKey(const Key('detail-create-login')), findsOneWidget);
+    expect(find.byKey(const Key('detail-reset-password')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('detail-create-login')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('field-login-password')), 'StuPass#1');
+    await tester.enterText(
+        find.byKey(const Key('field-login-confirm')), 'StuPass#1');
+    await tester.tap(find.byKey(const Key('submit-login-password')));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastProvisionId, 1);
+    expect(repo.lastProvisionPassword, 'StuPass#1');
+  });
+
+  testWidgets(
+      'detail of a linked student offers Reset Password and Login toggle',
+      (tester) async {
+    _bigViewport(tester);
+    const linked = StudentManagement(
+        id: 1,
+        rollNumber: '2201CE001',
+        name: 'Rahul Kumar',
+        status: 'ACTIVE',
+        loginLinked: true,
+        loginStatus: 'ACTIVE');
+    final repo = _FakeStudentManagementRepository()..students = const [linked];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Yes'), findsOneWidget);
+    expect(find.text('Login Status'), findsOneWidget);
+
+    // Reset password.
+    await tester.tap(find.byKey(const Key('detail-reset-password')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const Key('field-login-password')), 'NewPass#9');
+    await tester.enterText(
+        find.byKey(const Key('field-login-confirm')), 'NewPass#9');
+    await tester.tap(find.byKey(const Key('submit-login-password')));
+    await tester.pumpAndSettle();
+    expect(repo.lastPasswordId, 1);
+    expect(repo.lastPassword, 'NewPass#9');
+
+    // Deactivate the login.
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-toggle-login')));
+    await tester.pumpAndSettle();
+    expect(repo.lastLoginStatusId, 1);
+    expect(repo.lastLoginStatus, 'INACTIVE');
+  });
+
+  testWidgets('password dialog enforces minimum length and matching confirm',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active];
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-create-login')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('field-login-password')), 'short');
+    await tester.enterText(
+        find.byKey(const Key('field-login-confirm')), 'short');
+    await tester.tap(find.byKey(const Key('submit-login-password')));
+    await tester.pumpAndSettle();
+    expect(find.text('Password must be at least 8 characters'), findsOneWidget);
+    expect(repo.lastProvisionId, isNull);
+
+    await tester.enterText(
+        find.byKey(const Key('field-login-password')), 'LongEnough#1');
+    await tester.enterText(
+        find.byKey(const Key('field-login-confirm')), 'Different#2');
+    await tester.tap(find.byKey(const Key('submit-login-password')));
+    await tester.pumpAndSettle();
+    expect(find.text('Passwords do not match'), findsOneWidget);
+    expect(repo.lastProvisionId, isNull);
   });
 }

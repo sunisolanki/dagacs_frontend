@@ -82,15 +82,30 @@ class _HodDashboardScreenState extends State<HodDashboardScreen> {
         errors,
         _HodTab.dashboard);
     final sections = await _guard(
-        () => widget.hodRepository.getSections(), errors, _HodTab.sections);
+        () => widget.hodRepository
+            .getSections(startDate: _startDate, endDate: _endDate),
+        errors,
+        _HodTab.sections);
     final subjects = await _guard(
-        () => widget.hodRepository.getSubjects(), errors, _HodTab.subjects);
+        () => widget.hodRepository
+            .getSubjects(startDate: _startDate, endDate: _endDate),
+        errors,
+        _HodTab.subjects);
     final students = await _guard(
-        () => widget.hodRepository.getStudents(), errors, _HodTab.students);
+        () => widget.hodRepository
+            .getStudents(startDate: _startDate, endDate: _endDate),
+        errors,
+        _HodTab.students);
     final low = await _guard(
-        () => widget.hodRepository.getLowAttendance(), errors, _HodTab.low);
+        () => widget.hodRepository
+            .getLowAttendance(startDate: _startDate, endDate: _endDate),
+        errors,
+        _HodTab.low);
     final audit = await _guard(
-        () => widget.hodRepository.getAuditLogs(), errors, _HodTab.audit);
+        () => widget.hodRepository
+            .getAuditLogs(startDate: _startDate, endDate: _endDate),
+        errors,
+        _HodTab.audit);
 
     if (!mounted) return;
     setState(() {

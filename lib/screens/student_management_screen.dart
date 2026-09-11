@@ -79,6 +79,8 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 
   String _messageFor(ApiException e) {
+    final identityMessage = messageForIdentityCode(e.code);
+    if (identityMessage != null) return identityMessage;
     switch (e.statusCode) {
       case 401:
         return 'Session expired. Please sign in again.';
@@ -134,21 +136,41 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 
   Future<void> _openDetail(StudentManagement student) async {
-    final action = await showDialog<_DetailAction>(
+    final action = await showDialog<_StudentDetailAction>(
       context: context,
       builder: (dialogContext) => _StudentDetailDialog(
         student: student,
-        onEdit: () => Navigator.of(dialogContext).pop(_DetailAction.edit),
+        onEdit: () => Navigator.of(dialogContext).pop(_StudentDetailAction.edit),
         onToggleStatus: () =>
-            Navigator.of(dialogContext).pop(_DetailAction.toggle),
+            Navigator.of(dialogContext).pop(_StudentDetailAction.toggle),
+        onCreateLogin: () =>
+            Navigator.of(dialogContext).pop(_StudentDetailAction.createLogin),
+        onResetPassword: () =>
+            Navigator.of(dialogContext).pop(_StudentDetailAction.resetPassword),
+        onToggleLogin: () =>
+            Navigator.of(dialogContext).pop(_StudentDetailAction.toggleLogin),
       ),
     );
     if (action == null || !mounted) return;
-    if (action == _DetailAction.edit) {
+    if (action == _StudentDetailAction.edit) {
       await _openEdit(student);
-    } else if (action == _DetailAction.toggle) {
+    } else if (action == _StudentDetailAction.toggle) {
       await _setStatus(student, student.isActive ? 'INACTIVE' : 'ACTIVE');
+    } else if (action == _StudentDetailAction.createLogin) {
+      await _createLogin(student);
+    } else if (action == _StudentDetailAction.resetPassword) {
+      await _resetPassword(student);
+    } else if (action == _StudentDetailAction.toggleLogin) {
+      await _setLoginStatus(
+          student, student.loginIsActive ? 'INACTIVE' : 'ACTIVE');
     }
+  }
+
+  Future<void> _showError(String message) {
+    if (!mounted) return Future.value();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+    return Future.value();
   }
 
   Future<void> _setStatus(StudentManagement student, String status) async {
@@ -161,6 +183,69 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not change status. Please try again.')),
       );
+    }
+  }
+
+  Future<void> _createLogin(StudentManagement student) async {
+    final password = await _promptPassword(
+      context: context,
+      title: 'Create Login for ${student.name ?? 'Student'}',
+      submitLabel: 'Create Login',
+    );
+    if (password == null || !mounted) return;
+    try {
+      await widget.repository
+          .provisionLogin(student.id!, StudentLoginPasswordRequest(password));
+      if (!mounted) return;
+      await _load();
+    } on ApiException catch (e) {
+      await _showError(
+          'Could not create the login. ${_reasonFor(e)} Please try again.');
+    }
+  }
+
+  Future<void> _resetPassword(StudentManagement student) async {
+    final password = await _promptPassword(
+      context: context,
+      title: 'Reset Password for ${student.name ?? 'Student'}',
+      submitLabel: 'Reset Password',
+    );
+    if (password == null || !mounted) return;
+    try {
+      await widget.repository
+          .setLoginPassword(student.id!, StudentLoginPasswordRequest(password));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Password updated. Existing sessions keep working; the '
+              'new password applies to future sign-ins.')));
+    } on ApiException catch (e) {
+      await _showError(
+          'Could not reset the password. ${_reasonFor(e)} Please try again.');
+    }
+  }
+
+  Future<void> _setLoginStatus(StudentManagement student, String status) async {
+    try {
+      await widget.repository.setLoginStatus(student.id!, status);
+      if (!mounted) return;
+      await _load();
+    } on ApiException catch (e) {
+      await _showError(
+          'Could not change the login status. ${_reasonFor(e)} Please try again.');
+    }
+  }
+
+  String _reasonFor(ApiException e) {
+    switch (e.statusCode) {
+      case 400:
+        return 'The password must be at least 8 characters.';
+      case 404:
+        return 'This student no longer exists.';
+      case 409:
+        return 'A teacher or student with that email already has a login.';
+      default:
+        return e.message;
     }
   }
 
@@ -263,6 +348,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       itemCount: visible.length,
       itemBuilder: (context, index) {
         final student = visible[index];
+        final hasLogin = student.hasLogin;
         return Padding(
           padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),
           child: AppCard(
@@ -300,25 +386,26 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                   ),
                 ),
                 const SizedBox(width: DagacsSpace.sm),
-                AppStatusBadge(
-                  label: student.status ?? '-',
-                  active: student.status == 'ACTIVE',
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    AppStatusBadge(
+                      label: student.status ?? '-',
+                      active: student.status == 'ACTIVE',
+                    ),
+                    const SizedBox(height: 4),
+                    AppStatusBadge(
+                      label: hasLogin
+                          ? (student.loginIsActive
+                              ? 'LOGIN ACTIVE'
+                              : 'LOGIN INACTIVE')
+                          : 'NO LOGIN',
+                      active: hasLogin && student.loginIsActive,
+                    ),
+                  ],
                 ),
                 const SizedBox(width: 2),
-                IconButton(
-                  key: Key('toggle-status-${student.id}'),
-                  tooltip: student.isActive ? 'Deactivate' : 'Activate',
-                  icon: Icon(
-                    student.isActive
-                        ? Icons.block
-                        : Icons.check_circle_outline,
-                    color: student.isActive
-                        ? DagacsColors.error
-                        : DagacsColors.success,
-                  ),
-                  onPressed: () => _setStatus(
-                      student, student.isActive ? 'INACTIVE' : 'ACTIVE'),
-                ),
                 Icon(Icons.chevron_right, color: DagacsColors.textSecondary),
               ],
             ),
@@ -329,18 +416,26 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 }
 
-enum _DetailAction { edit, toggle }
+enum _StudentDetailAction { edit, toggle, createLogin, resetPassword, toggleLogin }
 
 class _StudentDetailDialog extends StatelessWidget {
   const _StudentDetailDialog({
     required this.student,
     required this.onEdit,
     required this.onToggleStatus,
+    required this.onCreateLogin,
+    required this.onResetPassword,
+    required this.onToggleLogin,
   });
 
   final StudentManagement student;
   final VoidCallback onEdit;
   final VoidCallback onToggleStatus;
+  final VoidCallback onCreateLogin;
+  final VoidCallback onResetPassword;
+  final VoidCallback onToggleLogin;
+
+  bool get _hasLogin => student.hasLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -367,7 +462,7 @@ class _StudentDetailDialog extends StatelessWidget {
     }
 
     return AppDialogFrame(
-      width: 480,
+      width: 520,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,16 +492,46 @@ class _StudentDetailDialog extends StatelessWidget {
           row('Batch', student.batchName),
           row('Section', student.sectionName),
           row('Status', student.status),
+          const Divider(height: 28),
+          Text('Login Account',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          row('Linked', _hasLogin ? 'Yes' : 'No'),
+          if (_hasLogin) row('Login Status', student.loginStatus),
           const SizedBox(height: DagacsSpace.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            spacing: DagacsSpace.sm,
+            runSpacing: DagacsSpace.sm,
+            alignment: WrapAlignment.end,
             children: [
               OutlinedButton(
                 key: const Key('detail-toggle-status'),
                 onPressed: onToggleStatus,
                 child: Text(student.isActive ? 'Deactivate' : 'Activate'),
               ),
-              const SizedBox(width: DagacsSpace.sm),
+              if (!_hasLogin)
+                ElevatedButton(
+                  key: const Key('detail-create-login'),
+                  onPressed: onCreateLogin,
+                  child: const Text('Create Login'),
+                )
+              else ...[
+                OutlinedButton(
+                  key: const Key('detail-reset-password'),
+                  onPressed: onResetPassword,
+                  child: const Text('Reset Password'),
+                ),
+                OutlinedButton(
+                  key: const Key('detail-toggle-login'),
+                  onPressed: onToggleLogin,
+                  child: Text(student.loginIsActive
+                      ? 'Deactivate Login'
+                      : 'Activate Login'),
+                ),
+              ],
               ElevatedButton(
                 key: const Key('edit-student'),
                 onPressed: onEdit,
@@ -415,6 +540,112 @@ class _StudentDetailDialog extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Password entry dialog used for both create-login and password reset.
+Future<String?> _promptPassword({
+  required BuildContext context,
+  required String title,
+  required String submitLabel,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (dialogContext) => _StudentPasswordDialog(
+      title: title,
+      submitLabel: submitLabel,
+    ),
+  );
+}
+
+class _StudentPasswordDialog extends StatefulWidget {
+  const _StudentPasswordDialog({required this.title, required this.submitLabel});
+
+  final String title;
+  final String submitLabel;
+
+  @override
+  State<_StudentPasswordDialog> createState() => _StudentPasswordDialogState();
+}
+
+class _StudentPasswordDialogState extends State<_StudentPasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Password is required';
+    }
+    if (value.trim().length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    return null;
+  }
+
+  String? _validateConfirm(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Confirm the password';
+    }
+    if (value != _passwordController.text) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogFrame(
+      width: 440,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 16),
+            AppFormTextField(
+              key: const Key('field-login-password'),
+              label: 'New Password',
+              controller: _passwordController,
+              obscureText: _obscure,
+              validator: _validatePassword,
+              suffixIcon: IconButton(
+                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ),
+            AppFormTextField(
+              key: const Key('field-login-confirm'),
+              label: 'Confirm Password',
+              controller: _confirmController,
+              obscureText: _obscure,
+              validator: _validateConfirm,
+            ),
+            const SizedBox(height: 8),
+            AppFormActions(
+              onCancel: () => Navigator.of(context).pop(),
+              onSubmit: () {
+                if (!_formKey.currentState!.validate()) return;
+                Navigator.of(context).pop(_passwordController.text);
+              },
+              submitting: false,
+              submitKey: 'submit-login-password',
+              submitLabel: widget.submitLabel,
+            ),
+          ],
+        ),
       ),
     );
   }

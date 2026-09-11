@@ -19,6 +19,8 @@ class _FakeHodRepository extends HodRepository {
 
   List<HodLowAttendance> low = const [];
   List<HodRollup> rollups = const [];
+  DateTime? lastLowStart;
+  DateTime? lastLowEnd;
 
   @override
   Future<List<HodRollup>> getRollups(
@@ -26,7 +28,12 @@ class _FakeHodRepository extends HodRepository {
       rollups;
 
   @override
-  Future<List<HodLowAttendance>> getLowAttendance() async => low;
+  Future<List<HodLowAttendance>> getLowAttendance(
+          {DateTime? startDate, DateTime? endDate}) async {
+    lastLowStart = startDate;
+    lastLowEnd = endDate;
+    return low;
+  }
 }
 
 class _FakeReportRepository extends ReportRepository {
@@ -347,7 +354,7 @@ void main() {
     );
   });
 
-  testWidgets('low-attendance hides the date filter and never sends dates',
+  testWidgets('low-attendance shows the date filter and renders',
       (tester) async {
     final hod = _FakeHodRepository()
       ..low = const [
@@ -370,17 +377,10 @@ void main() {
     await tester.tap(find.text('Low Attendance'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Start date'), findsNothing);
-    expect(find.text('End date'), findsNothing);
-    expect(find.text('Low Attendance is not date-filtered.'), findsOneWidget);
+    // The date bar is presented for low-attendance too (M9.5.5).
+    expect(find.text('Start date'), findsOneWidget);
+    expect(find.text('End date'), findsOneWidget);
     expect(find.text('Alice Smith'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('export-excel')));
-    await tester.pumpAndSettle();
-    expect(repo.exportCalls.single.type, 'low-attendance');
-    expect(repo.exportCalls.single.format, 'xlsx');
-    expect(repo.exportCalls.single.start, isNull);
-    expect(repo.exportCalls.single.end, isNull);
   });
 
   testWidgets('monthly rollups render through the frozen HOD analytics endpoint',

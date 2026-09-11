@@ -8,10 +8,15 @@ import 'package:dagacs_frontend/models/section.dart';
 import 'package:dagacs_frontend/models/semester.dart';
 import 'package:dagacs_frontend/models/student_management.dart';
 import 'package:dagacs_frontend/models/subject.dart';
+import 'package:dagacs_frontend/models/subject_offering.dart';
+import 'package:dagacs_frontend/models/teacher.dart';
+import 'package:dagacs_frontend/models/teacher_assignment.dart';
+import 'package:dagacs_frontend/models/teacher_management.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
 import 'package:dagacs_frontend/repositories/auth_repository.dart';
 import 'package:dagacs_frontend/repositories/master_data_repository.dart';
 import 'package:dagacs_frontend/repositories/student_management_repository.dart';
+import 'package:dagacs_frontend/repositories/teacher_management_repository.dart';
 import 'package:dagacs_frontend/screens/home_screen.dart';
 import 'package:dagacs_frontend/screens/login_screen.dart';
 import 'package:dagacs_frontend/screens/master_data/department_list_screen.dart';
@@ -60,6 +65,31 @@ class _FakeMasterDataRepository extends MasterDataRepository {
   @override
   Future<List<Subject>> getSubjects() async =>
       const [Subject(id: 1, code: 'CS301', name: 'DBMS')];
+
+  @override
+  Future<List<SubjectOffering>> getSubjectOfferings() async =>
+      const [SubjectOffering(id: 1, subjectId: 1, semesterId: 1)];
+
+  @override
+  Future<List<TeacherAssignment>> getTeacherAssignments() async =>
+      const [TeacherAssignment(id: 1, teacherId: 1, subjectOfferingId: 1, sectionId: 1)];
+
+  @override
+  Future<List<Teacher>> getTeachers() async =>
+      const [Teacher(id: 1, fullName: 'Dr A Sharma')];
+}
+
+class _FakeTeacherManagementRepository extends TeacherManagementRepository {
+  _FakeTeacherManagementRepository() : super(ApiClient());
+
+  @override
+  Future<List<TeacherManagement>> getTeachers() async => const [
+        TeacherManagement(
+            id: 5,
+            email: 'teacher@dagacs.local',
+            fullName: 'Dr A Sharma',
+            status: 'ACTIVE'),
+      ];
 }
 
 class _FakeStudentManagementRepository extends StudentManagementRepository {
@@ -110,6 +140,7 @@ Widget _masterHub() {
     home: MasterDataScreen(
       session: _session('ADMIN'),
       repository: _FakeMasterDataRepository(),
+      teacherManagementRepository: _FakeTeacherManagementRepository(),
     ),
   );
 }

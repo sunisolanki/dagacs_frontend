@@ -6,6 +6,7 @@ import 'package:dagacs_frontend/models/program.dart';
 import 'package:dagacs_frontend/models/section.dart';
 import 'package:dagacs_frontend/models/semester.dart';
 import 'package:dagacs_frontend/models/subject.dart';
+import 'package:dagacs_frontend/models/subject_offering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies Dart model deserialization against the ACTUAL backend DTO JSON
@@ -163,6 +164,37 @@ void main() {
       expect(s.departmentId, 1);
       expect(s.department?.name, 'Computer Science');
       expect(s.status, 'ACTIVE');
+    });
+  });
+
+  group('SubjectOffering', () {
+    test('parses nested subject and semester', () {
+      final o = SubjectOffering.fromJson({
+        'id': 1,
+        'subjectId': 4,
+        'subject': {'id': 4, 'code': 'CS301', 'name': 'DBMS'},
+        'semesterId': 5,
+        'semester': {
+          'id': 5,
+          'name': 'Semester 5',
+          'code': 'SEM5',
+          'academicSessionId': 3,
+          'academicSession': {'id': 3, 'name': '2026-27', 'code': '2026-27'},
+        },
+      });
+      expect(o.id, 1);
+      expect(o.subjectId, 4);
+      expect(o.subject?.code, 'CS301');
+      expect(o.subject?.name, 'DBMS');
+      expect(o.semesterId, 5);
+      expect(o.semester?.name, 'Semester 5');
+      expect(o.semester?.academicSession?.name, '2026-27');
+    });
+
+    test('request serializes exactly subjectId and semesterId', () {
+      const req = SubjectOfferingRequest(subjectId: 4, semesterId: 5);
+      expect(req.toJson(), {'subjectId': 4, 'semesterId': 5});
+      expect(req.toJson().keys.toSet(), {'subjectId', 'semesterId'});
     });
   });
 }

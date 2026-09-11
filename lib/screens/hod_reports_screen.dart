@@ -74,15 +74,9 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
   }
 
   bool get _datesInvalid =>
-      _isDateFiltered &&
       _startDate != null &&
       _endDate != null &&
       _startDate!.isAfter(_endDate!);
-
-  /// Low Attendance is NOT date-filtered by the backend: the date bar must not
-  /// be presented (or silently ignored) for that type. Dates are still kept in
-  /// state for the other four types and never cleared unnecessarily.
-  bool get _isDateFiltered => _reportType != 'low-attendance';
 
   Future<void> _load() async {
     if (_datesInvalid) return;
@@ -101,7 +95,8 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
               type: 'quarterly', startDate: _startDate, endDate: _endDate);
           break;
         case 'low-attendance':
-          _low = await widget.hodRepository.getLowAttendance();
+          _low = await widget.hodRepository
+              .getLowAttendance(startDate: _startDate, endDate: _endDate);
           break;
         case 'coverage':
           _coverage = await widget.reportRepository.getCoverage(
@@ -201,8 +196,8 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
       final payload = await widget.reportRepository.exportHodReport(
         _reportType,
         format,
-        startDate: _isDateFiltered ? _startDate : null,
-        endDate: _isDateFiltered ? _endDate : null,
+        startDate: _startDate,
+        endDate: _endDate,
       );
       final status = await widget.downloadFile(
           payload.bytes, payload.fileName, payload.contentType);
@@ -249,21 +244,13 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: _isDateFiltered
-                  ? ReportDateBar(
-                      startDate: _startDate,
-                      endDate: _endDate,
-                      onPickStart: _pickStartDate,
-                      onPickEnd: _pickEndDate,
-                      onClear: _clearDates,
-                    )
-                  : const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Low Attendance is not date-filtered.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ),
+              child: ReportDateBar(
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    onPickStart: _pickStartDate,
+                    onPickEnd: _pickEndDate,
+                    onClear: _clearDates,
+                  ),
             ),
             if (_datesInvalid)
               const Padding(

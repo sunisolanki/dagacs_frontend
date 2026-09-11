@@ -5,6 +5,9 @@ import '../models/program.dart';
 import '../models/section.dart';
 import '../models/semester.dart';
 import '../models/subject.dart';
+import '../models/subject_offering.dart';
+import '../models/teacher.dart';
+import '../models/teacher_assignment.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
 
@@ -37,6 +40,9 @@ class MasterDataRepository {
 
   Future<List<Subject>> getSubjects() =>
       _list('/admin/subjects', Subject.fromJson);
+
+  Future<List<SubjectOffering>> getSubjectOfferings() =>
+      _list('/admin/subject-offerings', SubjectOffering.fromJson);
 
   Future<T> _single<T>(
       Future<dynamic> request, T Function(Map<String, dynamic>) fromJson) async {
@@ -127,6 +133,41 @@ class MasterDataRepository {
           Subject.fromJson);
 
   Future<void> deleteSubject(int id) => _client.delete('/admin/subjects/$id');
+
+  Future<SubjectOffering> createSubjectOffering(
+          SubjectOfferingRequest request) =>
+      _single(_client.post('/admin/subject-offerings',
+          body: request.toJson()), SubjectOffering.fromJson);
+
+  Future<SubjectOffering> updateSubjectOffering(
+          int id, SubjectOfferingRequest request) =>
+      _single(_client.put('/admin/subject-offerings/$id',
+          body: request.toJson()), SubjectOffering.fromJson);
+
+  Future<void> deleteSubjectOffering(int id) =>
+      _client.delete('/admin/subject-offerings/$id');
+
+  Future<List<TeacherAssignment>> getTeacherAssignments() =>
+      _list('/admin/teacher-assignments', TeacherAssignment.fromJson);
+
+  Future<TeacherAssignment> createTeacherAssignment(
+          TeacherAssignmentRequest request) =>
+      _single(
+          _client.post('/admin/teacher-assignments', body: request.toJson()),
+          TeacherAssignment.fromJson);
+
+  Future<TeacherAssignment> updateTeacherAssignment(
+          int id, TeacherAssignmentRequest request) =>
+      _single(
+          _client.put('/admin/teacher-assignments/$id',
+              body: request.toJson()),
+          TeacherAssignment.fromJson);
+
+  Future<void> deleteTeacherAssignment(int id) =>
+      _client.delete('/admin/teacher-assignments/$id');
+
+  Future<List<Teacher>> getTeachers() =>
+      _list('/admin/teachers', Teacher.fromJson);
 
   Future<List<T>> _list<T>(
       String path, T Function(Map<String, dynamic>) fromJson) async {

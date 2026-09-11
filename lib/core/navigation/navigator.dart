@@ -14,6 +14,7 @@ class AppRoutes {
   static const String hodDashboard = '/hod/dashboard';
   static const String hodReports = '/hod/reports';
   static const String teacherReports = '/teacher/reports';
+  static const String teacherClasses = '/teacher/classes';
   static const String masterData = '/master-data';
   static const String masterDataDepartments = '/master-data/departments';
   static const String masterDataPrograms = '/master-data/programs';
@@ -22,4 +23,7 @@ class AppRoutes {
   static const String masterDataBatches = '/master-data/batches';
   static const String masterDataSections = '/master-data/sections';
   static const String masterDataSubjects = '/master-data/subjects';
+  static const String masterDataSubjectOfferings = '/master-data/subject-offerings';
+  static const String masterDataTeacherAssignments = '/master-data/teacher-assignments';
+  static const String masterDataTeachers = '/master-data/teachers';
 }

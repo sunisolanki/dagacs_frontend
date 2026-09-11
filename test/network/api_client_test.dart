@@ -22,6 +22,17 @@ class _MockClient extends http.BaseClient {
   }
 }
 
+ApiClient _clientReturning(int status, String body,
+    {void Function()? onUnauthorized}) {
+  return ApiClient(
+    baseUrl: 'http://test.local/api',
+    tokenProvider: () async => 'token',
+    onUnauthorized: onUnauthorized,
+    httpClient: _MockClient((req) =>
+        http.Response(body, status, headers: {'content-type': 'application/json'})),
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -156,6 +167,39 @@ void main() {
       }
     });
 
+    test('429 throws ApiException.tooManyRequests and does NOT invoke onUnauthorized',
+        () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(
+          429, '{"message":"Too many login attempts. Please try again later."}',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.post('/auth/login', notifyUnauthorized: false);
+        fail('expected ApiException 429');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 429);
+        expect(e.message, 'Too many login attempts. Please try again later.');
+      }
+      expect(unauthorizedCalled, isFalse,
+          reason: 'M9.6 M: rate limiting must never trigger the logout hook');
+    });
+
+    test('429 without a body message falls back to the fixed safe string',
+        () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(429, '',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.get('/x');
+        fail('expected ApiException 429');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 429);
+        expect(e.message, kTooManyRequestsMessage);
+        expect(unauthorizedCalled, isFalse,
+            reason: 'M9.6 M: no status reset/cooldown may fire the logout hook');
+      }
+    });
+
     test('500 throws ApiException.serverError with generic message', () async {
       try {
         await clientReturning(500).get('/x');
@@ -181,6 +225,93 @@ void main() {
       } on ApiException catch (e) {
         expect(e.statusCode, -1);
       }
+    });
+  });
+
+  group('M9.5.4 identity-resolution 401 behaviour (D5)', () {
+    test('401 WITHOUT a code invokes onUnauthorized and throws 401', () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(401, '{"message":"Expired"}',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.get('/teacher/classes');
+        fail('expected ApiException 401');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+        expect(e.code, isNull);
+      }
+      expect(unauthorizedCalled, isTrue);
+    });
+
+    test('401 WITH an identity code does NOT log out and carries the code',
+        () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(
+          401,
+          '{"code":"TEACHER_PROFILE_INACTIVE",'
+          '"message":"Teacher profile is inactive"}',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.get('/teacher/classes');
+        fail('expected ApiException 401');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+        expect(e.code, 'TEACHER_PROFILE_INACTIVE');
+        expect(e.message, contains('Teacher profile'));
+      }
+      expect(unauthorizedCalled, isFalse);
+    });
+
+    test('non-truthy codes never suppress the logout hook', () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(
+          401, '{"code":"SOME_UNKNOWN_CODE","message":"x"}',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.get('/x');
+        fail('expected ApiException 401');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 401);
+        expect(e.code, 'SOME_UNKNOWN_CODE');
+      }
+      expect(unauthorizedCalled, isTrue);
+    });
+  });
+
+  group('M9.5.4 identity message mapping', () {
+    test('identity codes map to actionable role-aware messages', () {
+      expect(
+        messageForIdentityCode('TEACHER_PROFILE_NOT_LINKED'),
+        contains('Teacher profile'),
+      );
+      expect(
+        messageForIdentityCode('STUDENT_PROFILE_INACTIVE'),
+        contains('Student profile'),
+      );
+      expect(
+        messageForIdentityCode('HOD_NOT_DESIGNATED'),
+        contains('HOD'),
+      );
+      expect(messageForIdentityCode('UNKNOWN'), isNull);
+      expect(messageForIdentityCode(null), isNull);
+    });
+
+    test('isIdentityResolutionCode recognises the backend codes', () {
+      for (final code in kIdentityResolutionCodes) {
+        expect(isIdentityResolutionCode(code), isTrue, reason: code);
+      }
+      expect(isIdentityResolutionCode('WHATEVER'), isFalse);
+      expect(isIdentityResolutionCode(null), isFalse);
+    });
+
+    test('userMessageFor prefers the identity message over session expiry',
+        () {
+      final inactive = ApiException(401, 'Teacher profile is inactive',
+          code: 'TEACHER_PROFILE_INACTIVE');
+      expect(userMessageFor(inactive), contains('Teacher profile'));
+
+      final noCode = ApiException(401, 'Expired');
+      expect(userMessageFor(noCode), kSessionExpiredMessage);
     });
   });
 

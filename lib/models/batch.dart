@@ -1,4 +1,5 @@
 import 'academic_session.dart';
+import 'section.dart';
 
 /// Matches backend `BatchDTO`.
 class Batch {
@@ -10,6 +11,7 @@ class Batch {
   final AcademicSession? academicSession;
   final String? program;
   final int? maxCapacity;
+  final List<Section> sections;
   final String? createdAt;
   final String? updatedAt;
 
@@ -22,6 +24,7 @@ class Batch {
     this.academicSession,
     this.program,
     this.maxCapacity,
+    this.sections = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -39,6 +42,11 @@ class Batch {
           : null,
       program: json['program'] as String?,
       maxCapacity: json['maxCapacity'] as int?,
+      sections: (json['sections'] as List?)
+          ?.whereType<Map>()
+          .map((e) => Section.fromJson(Map<String, dynamic>.from(e)))
+          .toList() ??
+          const [],
       createdAt: json['createdAt'] as String?,
       updatedAt: json['updatedAt'] as String?,
     );

@@ -105,6 +105,25 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     expect(find.text('Invalid email or password.'), findsOneWidget);
   });
 
+  testWidgets('429 shows cooldown message and does NOT log out', (tester) async {
+    final repo = _FakeAuthRepository((e, p) {
+      throw const ApiException.tooManyRequests();
+    });
+    final session = SessionController(repo);
+    await tester.pumpWidget(_buildApp(repo, session));
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'admin@dagacs.local');
+    await tester.enterText(find.byType(TextFormField).at(1), 'Admin@123');
+    await tester.tap(find.text('Sign In'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Too many login attempts'), findsOneWidget);
+    expect(find.text('HOME-ROUTE'), findsNothing,
+        reason: 'M9.6 M: a rate-limited login must not navigate forward');
+    expect(session.isAuthenticated, isFalse,
+        reason: 'M9.6 M: a rate-limited login must not establish a session');
+  });
+
   testWidgets('successful login establishes session and routes to home',
       (tester) async {
     final repo = _FakeAuthRepository((e, p) => const AuthResponse(

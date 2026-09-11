@@ -1,8 +1,9 @@
-/// Matches the backend M5.2 `StudentManagementDTO` (Jackson `non_null`).
+/// Matches the backend M5.2 `StudentManagementDTO` (Jackson `non_null`) plus the
+/// M9.5.2 login-linkage fields.
 ///
 /// Read/write ADMIN view of the student master. The backend resolves program,
 /// batch and section names; this model is used purely for display in the
-/// ADMIN-only Manage Students screen.
+/// ADMIN-only Manage Students screen. Passwords are never part of a response.
 class StudentManagement {
   final int? id;
   final String? rollNumber;
@@ -22,6 +23,8 @@ class StudentManagement {
   final String? batchName;
   final int? sectionId;
   final String? sectionName;
+  final bool? loginLinked;
+  final String? loginStatus;
 
   const StudentManagement({
     this.id,
@@ -42,6 +45,8 @@ class StudentManagement {
     this.batchName,
     this.sectionId,
     this.sectionName,
+    this.loginLinked,
+    this.loginStatus,
   });
 
   factory StudentManagement.fromJson(Map<String, dynamic> json) {
@@ -64,10 +69,28 @@ class StudentManagement {
       batchName: json['batchName'] as String?,
       sectionId: json['sectionId'] as int?,
       sectionName: json['sectionName'] as String?,
+      loginLinked: json['loginLinked'] as bool?,
+      loginStatus: json['loginStatus'] as String?,
     );
   }
 
   bool get isActive => status == 'ACTIVE';
+
+  /// Login account ACTIVE/INACTIVE; only meaningful when [hasLogin] is true.
+  bool get loginIsActive => loginStatus == 'ACTIVE';
+
+  bool get hasLogin => loginLinked == true;
+}
+
+/// Login/account HTTP-y payloads (M9.5.2): the initial password for
+/// provisioning and the new password for reset. The password is write-only and
+/// is never echoed back by the backend.
+class StudentLoginPasswordRequest {
+  final String password;
+
+  const StudentLoginPasswordRequest(this.password);
+
+  Map<String, dynamic> toJson() => {'password': password};
 }
 
 /// Create/update payload for the ADMIN student master API. Matches the backend

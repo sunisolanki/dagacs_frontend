@@ -49,6 +49,41 @@ void main() {
       expect(student.email, isNull);
       expect(student.programName, isNull);
       expect(student.isActive, isFalse);
+      expect(student.hasLogin, isFalse);
+    });
+
+    test('parses M9.5.2 login-linkage fields', () {
+      final student = StudentManagement.fromJson({
+        'id': 6,
+        'rollNumber': '2201CE004',
+        'name': 'Zoya',
+        'status': 'ACTIVE',
+        'loginLinked': true,
+        'loginStatus': 'ACTIVE',
+      });
+      expect(student.hasLogin, isTrue);
+      expect(student.loginIsActive, isTrue);
+      expect(student.loginStatus, 'ACTIVE');
+    });
+
+    test('parses a linked-but-deactivated login', () {
+      final student = StudentManagement.fromJson({
+        'id': 7,
+        'rollNumber': '2201CE005',
+        'name': 'Arjun',
+        'status': 'ACTIVE',
+        'loginLinked': true,
+        'loginStatus': 'INACTIVE',
+      });
+      expect(student.hasLogin, isTrue);
+      expect(student.loginIsActive, isFalse);
+    });
+  });
+
+  group('StudentLoginPasswordRequest', () {
+    test('serializes the write-only password', () {
+      const request = StudentLoginPasswordRequest('TempPass#1');
+      expect(request.toJson(), {'password': 'TempPass#1'});
     });
   });
 

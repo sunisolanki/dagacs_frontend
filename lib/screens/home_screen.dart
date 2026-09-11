@@ -224,6 +224,15 @@ class HomeScreen extends StatelessWidget {
     if (role == 'TEACHER') {
       tiles.add(
         AppFeatureTile(
+          key: const Key('teacher-my-classes-tile'),
+          icon: Icons.class_outlined,
+          title: 'My Classes',
+          subtitle: 'Your assigned classes with Take Attendance',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.teacherClasses),
+        ),
+      );
+      tiles.add(
+        AppFeatureTile(
           icon: Icons.event_available,
           title: sideNavVisible ? null : 'Attendance',
           subtitle: 'Create sessions and mark student attendance',
@@ -265,7 +274,7 @@ class HomeScreen extends StatelessWidget {
           icon: Icons.storage,
           title: sideNavVisible ? null : 'Master Data',
           subtitle:
-              'Departments, Programs, Sessions, Semesters, Batches, Sections, Subjects',
+              'Departments, Programs, Sessions, Semesters, Batches, Sections, Subjects, Offerings',
           onTap: () => Navigator.pushNamed(context, AppRoutes.masterData),
         ),
       );

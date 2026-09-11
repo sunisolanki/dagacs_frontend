@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/academic_session.dart';
 import '../../models/batch.dart';
+import '../../models/program.dart';
 import '../../network/api_exception.dart';
 import '../../repositories/master_data_repository.dart';
 import '../../widgets/dagacs_widgets.dart';
@@ -52,6 +53,7 @@ class _BatchFormDialogState extends State<_BatchFormDialog> {
   String? _submitError;
 
   List<AcademicSession> _sessions = const [];
+  Map<int, Program> _programsById = const {};
 
   bool get _isEdit => widget.initial != null;
 
@@ -76,13 +78,20 @@ class _BatchFormDialogState extends State<_BatchFormDialog> {
       _referencesError = null;
     });
     try {
-      final sessions = await widget.repository.getAcademicSessions();
+      final results = await Future.wait([
+        widget.repository.getAcademicSessions(),
+        widget.repository.getPrograms(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _sessions = sessions;
+        _sessions = results[0] as List<AcademicSession>;
+        _programsById = {
+          for (final program in results[1] as List<Program>)
+            if (program.id != null) program.id!: program,
+        };
         _academicSessionId = widget.initial?.academicSession?.id ??
             widget.initial?.academicSessionId ??
-            sessions.firstOrNull?.id;
+            _sessions.firstOrNull?.id;
         _loadingReferences = false;
       });
     } on ApiException {
@@ -100,11 +109,14 @@ class _BatchFormDialogState extends State<_BatchFormDialog> {
     }
   }
 
+  String _sessionLabel(AcademicSession s) =>
+      academicSessionContextLabel(s, programsById: _programsById);
+
   String? _yearValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return 'Year is required';
+    if (v == null || v.trim().isEmpty) return 'Admission year is required';
     final parsed = int.tryParse(v.trim());
-    if (parsed == null) return 'Year must be a number';
-    if (parsed < 2000 || parsed > 2100) return 'Enter a valid year';
+    if (parsed == null) return 'Admission year must be a number';
+    if (parsed < 2000 || parsed > 2100) return 'Enter a valid admission year';
     return null;
   }
 
@@ -197,7 +209,7 @@ class _BatchFormDialogState extends State<_BatchFormDialog> {
           ),
           AppFormTextField(
             key: const Key('field-year'),
-            label: 'Year (e.g. 2026)',
+            label: 'Admission Year (e.g. 2026)',
             controller: _year,
             keyboardType: TextInputType.number,
             validator: _yearValidator,
@@ -215,8 +227,15 @@ class _BatchFormDialogState extends State<_BatchFormDialog> {
             value: _academicSessionId,
             items: _sessions
                 .where((s) => s.id != null)
-                .map((s) =>
-                    DropdownMenuItem(value: s.id, child: Text(s.name ?? 'Unknown')))
+                .map((s) => DropdownMenuItem(
+                      value: s.id,
+                      child: Text(
+                        _sessionLabel(s),
+                        maxLines: 2,
+                        softWrap: true,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
                 .toList(),
             onChanged: (v) => setState(() => _academicSessionId = v),
             validator: (v) => v == null ? 'Academic Session is required' : null,

@@ -219,4 +219,78 @@ void main() {
       expect(student.status, 'ACTIVE');
     });
   });
+
+  group('StudentManagementRepository.provisionLogin', () {
+    test('POSTs the write-only password to admin/students/{id}/login',
+        () async {
+      String? method;
+      String? seenPath;
+      Object? body;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          method = req.method;
+          seenPath = req.url.path;
+          body = jsonDecode(req.body);
+          return http.Response(
+              '{"id":3,"rollNumber":"2201CE001","name":"Rahul Kumar",'
+              '"loginLinked":true,"loginStatus":"ACTIVE"}',
+              201,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      final student = await repo.provisionLogin(
+          3, const StudentLoginPasswordRequest('StuPass#1'));
+      final bodyMap = body! as Map;
+      expect(method, 'POST');
+      expect(seenPath, '/api/admin/students/3/login');
+      expect(bodyMap['password'], 'StuPass#1');
+      expect(student.hasLogin, isTrue);
+      expect(student.loginStatus, 'ACTIVE');
+    });
+  });
+
+  group('StudentManagementRepository.setLoginStatus', () {
+    test('PATCHes status to admin/students/{id}/login/status', () async {
+      String? method;
+      String? seenPath;
+      Object? body;
+      final client = _capturingClient((req) {
+        method = req.method;
+        seenPath = req.url.path;
+        body = jsonDecode(req.body);
+      });
+      final repo = StudentManagementRepository(client);
+      final student = await repo.setLoginStatus(3, 'INACTIVE');
+      final bodyMap = body! as Map;
+      expect(method, 'PATCH');
+      expect(seenPath, '/api/admin/students/3/login/status');
+      expect(bodyMap['status'], 'INACTIVE');
+      expect(student.status, 'ACTIVE');
+    });
+  });
+
+  group('StudentManagementRepository.setLoginPassword', () {
+    test('PUTs the new password to admin/students/{id}/login/password',
+        () async {
+      String? method;
+      String? seenPath;
+      Object? body;
+      final client = _capturingClient((req) {
+        method = req.method;
+        seenPath = req.url.path;
+        body = jsonDecode(req.body);
+      });
+      final repo = StudentManagementRepository(client);
+      final student = await repo.setLoginPassword(
+          3, const StudentLoginPasswordRequest('NewPass#9'));
+      final bodyMap = body! as Map;
+      expect(method, 'PUT');
+      expect(seenPath, '/api/admin/students/3/login/password');
+      expect(bodyMap['password'], 'NewPass#9');
+      expect(student.id, 1);
+    });
+  });
 }

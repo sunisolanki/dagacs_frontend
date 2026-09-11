@@ -7,9 +7,14 @@ import 'package:dagacs_frontend/models/program.dart';
 import 'package:dagacs_frontend/models/section.dart';
 import 'package:dagacs_frontend/models/semester.dart';
 import 'package:dagacs_frontend/models/subject.dart';
+import 'package:dagacs_frontend/models/subject_offering.dart';
+import 'package:dagacs_frontend/models/teacher.dart';
+import 'package:dagacs_frontend/models/teacher_assignment.dart';
+import 'package:dagacs_frontend/models/teacher_management.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
 import 'package:dagacs_frontend/repositories/auth_repository.dart';
 import 'package:dagacs_frontend/repositories/master_data_repository.dart';
+import 'package:dagacs_frontend/repositories/teacher_management_repository.dart';
 import 'package:dagacs_frontend/screens/master_data_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +59,32 @@ class _FakeMasterDataRepository extends MasterDataRepository {
   @override
   Future<List<Subject>> getSubjects() async =>
       const [Subject(id: 1, code: 'CS301', name: 'DBMS')];
+
+  @override
+  Future<List<SubjectOffering>> getSubjectOfferings() async =>
+      const [SubjectOffering(id: 1, subjectId: 1, semesterId: 1)];
+
+  @override
+  Future<List<TeacherAssignment>> getTeacherAssignments() async =>
+      const [TeacherAssignment(
+          id: 9, teacherId: 1, subjectOfferingId: 1, sectionId: 1)];
+
+  @override
+  Future<List<Teacher>> getTeachers() async =>
+      const [Teacher(id: 1, fullName: 'Dr A Sharma')];
+}
+
+class _FakeTeacherManagementRepository extends TeacherManagementRepository {
+  _FakeTeacherManagementRepository() : super(ApiClient());
+
+  @override
+  Future<List<TeacherManagement>> getTeachers() async => const [
+        TeacherManagement(
+            id: 5,
+            email: 'teacher@dagacs.local',
+            fullName: 'Dr A Sharma',
+            status: 'ACTIVE'),
+      ];
 }
 
 Future<void> _pumpAdminHub(WidgetTester tester,
@@ -63,6 +94,7 @@ Future<void> _pumpAdminHub(WidgetTester tester,
   await tester.pumpWidget(MaterialApp(
     home: MasterDataScreen(
       repository: repository ?? _FakeMasterDataRepository(),
+      teacherManagementRepository: _FakeTeacherManagementRepository(),
       session: session,
     ),
   ));
@@ -87,7 +119,7 @@ Future<void> _atSize(WidgetTester tester, Size size) async {
 }
 
 void main() {
-  testWidgets('hub groups the seven entities under category headings',
+  testWidgets('hub groups the entities under category headings',
       (tester) async {
     await _pumpAdminHub(tester);
 
@@ -95,6 +127,7 @@ void main() {
     expect(find.text('ACADEMIC CALENDAR'), findsOneWidget);
     expect(find.text('STUDENT STRUCTURE'), findsOneWidget);
     expect(find.text('ACADEMIC CATALOG'), findsOneWidget);
+    expect(find.text('FACULTY & ACCESS'), findsOneWidget);
 
     expect(find.byKey(const Key('master-data-departments')), findsOneWidget);
     expect(find.byKey(const Key('master-data-programs')), findsOneWidget);
@@ -104,6 +137,11 @@ void main() {
     expect(find.byKey(const Key('master-data-batches')), findsOneWidget);
     expect(find.byKey(const Key('master-data-sections')), findsOneWidget);
     expect(find.byKey(const Key('master-data-subjects')), findsOneWidget);
+    expect(find.byKey(const Key('master-data-subject-offerings')),
+        findsOneWidget);
+    expect(find.byKey(const Key('master-data-teacher-assignments')),
+        findsOneWidget);
+    expect(find.byKey(const Key('master-data-teachers')), findsOneWidget);
   });
 
   testWidgets('hub cards show a short description and the live record count',
@@ -114,9 +152,14 @@ void main() {
     expect(find.text('Degree programs by department'), findsOneWidget);
     expect(find.text('Sessions grouped by program'), findsOneWidget);
     expect(find.text('Study periods within a session'), findsOneWidget);
-    expect(find.text('Student cohorts per academic session'), findsOneWidget);
+    expect(find.text('Admission cohorts (e.g. Batch 2025)'), findsOneWidget);
     expect(find.text('Groups within a batch'), findsOneWidget);
     expect(find.text('Catalogue with credit hours and status'), findsOneWidget);
+    expect(find.text('Subjects mapped to semesters'), findsOneWidget);
+    expect(find.text('Teachers mapped to offerings and sections'),
+        findsOneWidget);
+    expect(find.text('Faculty profiles, login accounts and HOD designation'),
+        findsOneWidget);
 
     expect(find.text('2 records'), findsOneWidget);
     expect(find.text('1 record'), findsWidgets);
@@ -143,6 +186,9 @@ void main() {
         'master-data-batches',
         'master-data-sections',
         'master-data-subjects',
+        'master-data-subject-offerings',
+        'master-data-teacher-assignments',
+        'master-data-teachers',
       ]) {
         expect(find.byKey(Key(key)), findsOneWidget);
       }

@@ -19,6 +19,7 @@ import 'package:dagacs_frontend/models/section.dart';
 import 'package:dagacs_frontend/models/student_management.dart';
 import 'package:dagacs_frontend/models/student_profile.dart';
 import 'package:dagacs_frontend/models/teacher_report_row.dart';
+import 'package:dagacs_frontend/models/teacher_management.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/attendance_repository.dart';
@@ -28,6 +29,7 @@ import 'package:dagacs_frontend/repositories/master_data_repository.dart';
 import 'package:dagacs_frontend/repositories/report_repository.dart';
 import 'package:dagacs_frontend/repositories/student_management_repository.dart';
 import 'package:dagacs_frontend/repositories/student_profile_repository.dart';
+import 'package:dagacs_frontend/repositories/teacher_management_repository.dart';
 import 'package:dagacs_frontend/screens/attendance_session_list_screen.dart';
 import 'package:dagacs_frontend/screens/hod_dashboard_screen.dart';
 import 'package:dagacs_frontend/screens/hod_reports_screen.dart';
@@ -74,6 +76,13 @@ class _FakeMasterDataRepository extends MasterDataRepository {
   @override
   Future<List<Section>> getSections() async =>
       const [Section(id: 1, name: 'A', sectionCode: 'A')];
+}
+
+class _FakeTeacherManagementRepository extends TeacherManagementRepository {
+  _FakeTeacherManagementRepository() : super(ApiClient());
+
+  @override
+  Future<List<TeacherManagement>> getTeachers() async => const [];
 }
 
 class _FakeStudentManagementRepository extends StudentManagementRepository {
@@ -124,16 +133,24 @@ class _FakeHodRepository extends HodRepository {
       );
 
   @override
-  Future<List<HodSectionAttendance>> getSections() async => const [];
+  Future<List<HodSectionAttendance>> getSections(
+      {DateTime? startDate, DateTime? endDate}) async =>
+      const [];
 
   @override
-  Future<List<HodSubjectAttendance>> getSubjects() async => const [];
+  Future<List<HodSubjectAttendance>> getSubjects(
+      {DateTime? startDate, DateTime? endDate}) async =>
+      const [];
 
   @override
-  Future<List<HodStudentAttendance>> getStudents() async => const [];
+  Future<List<HodStudentAttendance>> getStudents(
+      {DateTime? startDate, DateTime? endDate}) async =>
+      const [];
 
   @override
-  Future<List<HodLowAttendance>> getLowAttendance() async => const [];
+  Future<List<HodLowAttendance>> getLowAttendance(
+      {DateTime? startDate, DateTime? endDate}) async =>
+      const [];
 
   @override
   Future<List<HodRollup>> getRollups(
@@ -143,7 +160,9 @@ class _FakeHodRepository extends HodRepository {
       const [];
 
   @override
-  Future<List<HodAuditLogEntry>> getAuditLogs() async => const [];
+  Future<List<HodAuditLogEntry>> getAuditLogs(
+      {DateTime? startDate, DateTime? endDate}) async =>
+      const [];
 }
 
 class _FakeReportRepository extends ReportRepository {
@@ -233,8 +252,12 @@ MaterialApp _buildApp(String role, _RouteObserver observer) {
         case '/master-data':
           return MaterialPageRoute(
               settings: settings,
-              builder: (_) =>
-                  MasterDataScreen(repository: master, session: session));
+              builder: (_) => MasterDataScreen(
+                    repository: master,
+                    teacherManagementRepository:
+                        _FakeTeacherManagementRepository(),
+                    session: session,
+                  ));
         default:
           return MaterialPageRoute(
               settings: settings, builder: (_) => const SizedBox());

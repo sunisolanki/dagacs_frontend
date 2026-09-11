@@ -5,21 +5,27 @@ import '../core/session/session_controller.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
+import '../repositories/teacher_management_repository.dart';
 import '../widgets/dagacs_widgets.dart';
 
-/// ADMIN-only Master Data hub.
+/// ADMIN-only Master Data hub (M9.5.1).
 ///
-/// Presents the seven academic master-data entities (Departments, Programs,
-/// Academic Sessions, Semesters, Batches, Sections, Subjects) grouped into
-/// four professional categories, each with a short description, a live record
-/// count (from the repository, not faked) and entry to the entity's CRUD list.
-/// Non-ADMIN roles see an informational screen - backend RBAC
-/// (`/api/admin/**` requires ADMIN) stays authoritative.
+/// Presents the academic master-data entities (Departments, Programs,
+/// Academic Sessions, Semesters, Batches, Sections, Subjects, Subject
+/// Offerings, Teacher Assignments) plus the Teachers management entry,
+/// grouped into professional categories, each with a short description, a
+/// live record count (from the repository, not faked) and entry to the
+/// entity's CRUD list. Non-ADMIN roles see an informational screen - backend
+/// RBAC (`/api/admin/**` requires ADMIN) stays authoritative.
 class MasterDataScreen extends StatefulWidget {
   const MasterDataScreen(
-      {super.key, required this.repository, required this.session});
+      {super.key,
+      required this.repository,
+      required this.teacherManagementRepository,
+      required this.session});
 
   final MasterDataRepository repository;
+  final TeacherManagementRepository teacherManagementRepository;
   final SessionController session;
 
   @override
@@ -52,6 +58,9 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
       final batches = await widget.repository.getBatches();
       final sections = await widget.repository.getSections();
       final subjects = await widget.repository.getSubjects();
+      final offerings = await widget.repository.getSubjectOfferings();
+      final assignments = await widget.repository.getTeacherAssignments();
+      final teachers = await widget.teacherManagementRepository.getTeachers();
       if (!mounted) return;
       setState(() {
         _counts = {
@@ -62,6 +71,9 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
           'batches': batches.length,
           'sections': sections.length,
           'subjects': subjects.length,
+          'subject-offerings': offerings.length,
+          'teacher-assignments': assignments.length,
+          'teachers': teachers.length,
         };
         _loading = false;
       });
@@ -197,7 +209,7 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
                       route: AppRoutes.masterDataBatches,
                       icon: Icons.groups_outlined,
                       title: 'Batches',
-                      description: 'Student cohorts per academic session',
+                      description: 'Admission cohorts (e.g. Batch 2025)',
                       count: _counts['batches'] ?? 0,
                     ),
                     _card(
@@ -221,6 +233,37 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
                       title: 'Subjects',
                       description: 'Catalogue with credit hours and status',
                       count: _counts['subjects'] ?? 0,
+                    ),
+                    _card(
+                      key: 'master-data-subject-offerings',
+                      route: AppRoutes.masterDataSubjectOfferings,
+                      icon: Icons.merge_type_outlined,
+                      title: 'Subject Offerings',
+                      description: 'Subjects mapped to semesters',
+                      count: _counts['subject-offerings'] ?? 0,
+                    ),
+                    _card(
+                      key: 'master-data-teacher-assignments',
+                      route: AppRoutes.masterDataTeacherAssignments,
+                      icon: Icons.badge_outlined,
+                      title: 'Teacher Assignments',
+                      description: 'Teachers mapped to offerings and sections',
+                      count: _counts['teacher-assignments'] ?? 0,
+                    ),
+                  ],
+                ),
+                _section(
+                  label: 'Faculty & Access',
+                  icon: Icons.badge_outlined,
+                  children: [
+                    _card(
+                      key: 'master-data-teachers',
+                      route: AppRoutes.masterDataTeachers,
+                      icon: Icons.people_outline,
+                      title: 'Teachers',
+                      description:
+                          'Faculty profiles, login accounts and HOD designation',
+                      count: _counts['teachers'] ?? 0,
                     ),
                   ],
                 ),

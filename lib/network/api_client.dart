@@ -12,11 +12,16 @@ import 'api_exception.dart';
 /// Every request automatically attaches `Authorization: Bearer <JWT>` - the
 /// token logic lives here only, never duplicated across screens.
 ///
-/// Response mapping (Phase 6):
+/// Response mapping (Phase 6 / M9.5.4):
 ///   - 200/201/204 -> decoded body (or null)
-///   - 400/403/404/409/500 -> typed [ApiException]
-///   - 401 -> typed [ApiException] AND invokes [onUnauthorized] so the app can
-///     clear the expired session and route back to login.
+///   - 400/403/404/409/429/500 -> typed [ApiException] (carrying the backend
+///     machine-readable [ApiException.code] when the body had one)
+///   - 429 -> typed [ApiException] with a fixed safe message; NEVER a logout
+///     trigger (M9.6 M - a rate-limited login is not a session problem)
+///   - 401 -> typed [ApiException]. Only a 401 WITHOUT an identity-resolution
+///     code (invalid/expired JWT, D5) invokes [onUnauthorized] to clear the
+///     session and route back to login. A 401 WITH a profile code keeps the
+///     user signed in - their session is valid but their profile is unusable.
 ///   - network failure -> [ApiException.network]
 class ApiClient {
   ApiClient({
@@ -71,37 +76,59 @@ class ApiClient {
   Never _throwForStatus(int status, http.Response response,
       {bool notifyUnauthorized = true}) {
     String message = '';
+    String? code;
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) {
         message = (decoded['message'] as String?) ?? '';
+        code = (decoded['code'] as String?)?.trim();
+        if (code != null && code.isEmpty) code = null;
       }
     } catch (_) {
       message = '';
     }
     switch (status) {
       case 400:
-        throw ApiException(400, message.isNotEmpty ? message : 'Bad request');
+        throw ApiException(400, message.isNotEmpty ? message : 'Bad request',
+            code: code);
       case 401:
-        // A 401 on an authenticated request means the session is expired/invalid,
-        // so the global onUnauthorized hook fires. Login (POST /auth/login) opts
-        // out: an invalid-credentials 401 is a normal flow, not a session expiry.
-        if (notifyUnauthorized) {
+        // A code-less 401 on an authenticated request means the JWT is
+        // expired/invalid, so the global logout hook fires (D5). A 401 WITH an
+        // identity-resolution code means the profile behind a VALID session is
+        // missing/inactive: no logout - the user stays signed in and sees the
+        // actionable reason instead. Login (POST /auth/login) opts out of the
+        // hook entirely: an invalid-credentials 401 is a normal flow.
+        // Raw body text is never surfaced (M7.5): the message is the fixed
+        // session-expired string, or the standardized identity message when an
+        // identity code was present.
+        if (notifyUnauthorized && !isIdentityResolutionCode(code)) {
           onUnauthorized?.call();
         }
-        throw const ApiException.unauthorized();
+        throw ApiException(
+            401,
+            messageForIdentityCode(code) ?? kSessionExpiredMessage,
+            code: code);
       case 403:
-        throw const ApiException.forbidden();
+        throw ApiException(403, kNotAuthorizedMessage, code: code);
       case 404:
-        throw const ApiException.notFound();
+        throw ApiException(404, kNotFoundMessage, code: code);
       case 409:
         throw ApiException(
             409,
             message.isNotEmpty
                 ? message
-                : 'Request conflicts with existing data.');
+                : 'Request conflicts with existing data.',
+            code: code);
+      case 429:
+        // M9.6 M: login rate limited. Never a session problem - no
+        // onUnauthorized, no logout. Prefer the backend's own (already
+        // user-safe) message, fall back to the fixed string otherwise.
+        throw ApiException(
+            429,
+            message.isNotEmpty ? message : kTooManyRequestsMessage,
+            code: code);
       default:
-        throw const ApiException.serverError();
+        throw ApiException(500, kServerErrorMessage, code: code);
     }
   }
 
