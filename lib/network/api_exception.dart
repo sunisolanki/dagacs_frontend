@@ -37,6 +37,8 @@ class ApiException implements Exception {
       : this(500, msg);
   const ApiException.network([String msg = kNetworkErrorMessage])
       : this(-1, msg);
+  const ApiException.timeout([String msg = kTimeoutMessage])
+      : this(kTimeoutStatusCode, msg);
 }
 
 /// Standardized, user-safe message strings (M7.5 hardening). Raw backend
@@ -54,6 +56,17 @@ const String kSessionExpiredMessage =
 /// a session problem, so the client must never treat it like a 401/logout.
 const String kTooManyRequestsMessage =
     'Too many login attempts. Please wait and try again later.';
+
+/// M9.14: a request exceeded its bounded timeout. This is a connectivity
+/// problem, never a session problem - the user is never logged out.
+const int kTimeoutStatusCode = -2;
+const String kTimeoutMessage =
+    'Request timed out. Please check your connection and try again.';
+
+/// M9.14: non-login HTTP 429 (throttled request that is not the login
+/// endpoint). Generic wording - never the login-cooldown text.
+const String kRateLimitedMessage =
+    'Too many requests. Please wait a moment and try again.';
 
 /// Stable backend identity-resolution codes (D5, M9.5.4).
 ///
@@ -128,9 +141,13 @@ String userMessageFor(ApiException e) {
     case 404:
       return kNotFoundMessage;
     case 429:
-      // M9.6 M: a rate-limited login is a cooldown, never a session problem;
-      // use the safe fixed message (not raw backend text).
-      return kTooManyRequestsMessage;
+      // M9.14: the message is set at throw time in ApiClient - the login
+      // branch carries the login cooldown wording, every other 429 carries the
+      // generic rate-limit text. An unknown/empty 429 falls back to the generic
+      // throttle, never the login wording.
+      return e.message.isNotEmpty ? e.message : kRateLimitedMessage;
+    case kTimeoutStatusCode:
+      return kTimeoutMessage;
     case -1:
       return kNetworkErrorMessage;
     default:

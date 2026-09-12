@@ -6,6 +6,16 @@ import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
 import '../widgets/dagacs_widgets.dart';
 
+/// M9.14: inline date-range validation message shown when the selected start
+/// date is after the selected end date.
+const String kInvertedDateRangeMessage =
+    'End date must be on or after the start date.';
+
+/// True when the optional inclusive date range is inverted (start after end).
+/// An equal range (start == end) is a valid single-day filter.
+bool isInvertedDateRange(DateTime? start, DateTime? end) =>
+    start != null && end != null && start.isAfter(end);
+
 /// Read-only student attendance view. The backend resolves the student
 /// identity from the JWT — no studentId is accepted from the client.
 ///
@@ -51,6 +61,10 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   // requests only — GET /student/attendance/my stays undated.
   DateTime? _startDate;
   DateTime? _endDate;
+
+  // M9.14: client-side range validation message (start <= end). Set when a
+  // pick would invert the range; the inverted request is never issued.
+  String? _dateError;
 
   // Overall calculation (B) — independent of records.
   bool _overallLoading = true;
@@ -166,6 +180,12 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   }
 
   Future<void> _applyDates() async {
+    // M9.14 defense in depth: an inverted range must never reach a
+    // calculation request, regardless of how the pair got here.
+    if (isInvertedDateRange(_startDate, _endDate)) {
+      setState(() => _dateError = kInvertedDateRangeMessage);
+      return;
+    }
     setState(() {
       _overallLoading = true;
       _overallError = null;
@@ -185,7 +205,14 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       helpText: 'Select start date',
     );
     if (picked == null) return;
-    setState(() => _startDate = picked);
+    if (isInvertedDateRange(picked, _endDate)) {
+      setState(() => _dateError = kInvertedDateRangeMessage);
+      return;
+    }
+    setState(() {
+      _startDate = picked;
+      _dateError = null;
+    });
     await _applyDates();
   }
 
@@ -199,7 +226,14 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
       helpText: 'Select end date',
     );
     if (picked == null) return;
-    setState(() => _endDate = picked);
+    if (isInvertedDateRange(_startDate, picked)) {
+      setState(() => _dateError = kInvertedDateRangeMessage);
+      return;
+    }
+    setState(() {
+      _endDate = picked;
+      _dateError = null;
+    });
     await _applyDates();
   }
 
@@ -207,6 +241,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     setState(() {
       _startDate = null;
       _endDate = null;
+      _dateError = null;
     });
     _applyDates();
   }
@@ -268,38 +303,52 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
     final hasFilter = _startDate != null || _endDate != null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const Key('start-date-button'),
-              onPressed: _pickStartDate,
-              icon: const Icon(Icons.date_range),
-              label: Text(
-                _startDate == null ? 'Start date' : _formatDate(_startDate!),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('start-date-button'),
+                  onPressed: _pickStartDate,
+                  icon: const Icon(Icons.date_range),
+                  label: Text(
+                    _startDate == null ? 'Start date' : _formatDate(_startDate!),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const Key('end-date-button'),
+                  onPressed: _pickEndDate,
+                  icon: const Icon(Icons.date_range),
+                  label: Text(
+                    _endDate == null ? 'End date' : _formatDate(_endDate!),
+                  ),
+                ),
+              ),
+              if (hasFilter) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  key: const Key('clear-dates-button'),
+                  onPressed: _clearDates,
+                  tooltip: 'Clear dates',
+                  icon: const Icon(Icons.clear),
+                ),
+              ],
+            ],
+          ),
+          if (_dateError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                _dateError!,
+                key: const Key('date-range-error'),
+                style: const TextStyle(color: Colors.red, fontSize: 12),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const Key('end-date-button'),
-              onPressed: _pickEndDate,
-              icon: const Icon(Icons.date_range),
-              label: Text(
-                _endDate == null ? 'End date' : _formatDate(_endDate!),
-              ),
-            ),
-          ),
-          if (hasFilter) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              key: const Key('clear-dates-button'),
-              onPressed: _clearDates,
-              tooltip: 'Clear dates',
-              icon: const Icon(Icons.clear),
-            ),
-          ],
         ],
       ),
     );

@@ -22,6 +22,43 @@ class _MockClient extends http.BaseClient {
   }
 }
 
+class _DelayedClient extends http.BaseClient {
+  _DelayedClient(this.delay);
+  final Duration delay;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await Future<void>.delayed(delay);
+    return http.StreamedResponse(
+      Stream.value(const [0x00]),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  }
+}
+
+/// Simulates a server whose request (connect/send) and body consumption each
+/// take time INDEPENDENTLY, so a per-phase timeout chain could hide the real
+/// total duration. The M9.14 single-budget contract must still see the sum.
+class _SlowBodyClient extends http.BaseClient {
+  _SlowBodyClient(this.sendDelay, this.bodyDelay);
+  final Duration sendDelay;
+  final Duration bodyDelay;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    await Future<void>.delayed(sendDelay);
+    final body = Stream<List<int>>.multi((controller) {
+      Future<void>.delayed(bodyDelay).then((_) {
+        controller.add(const [0x7B]); // '{'
+        controller.close();
+      });
+    });
+    return http.StreamedResponse(body, 200,
+        headers: {'content-type': 'application/json'});
+  }
+}
+
 ApiClient _clientReturning(int status, String body,
     {void Function()? onUnauthorized}) {
   return ApiClient(
@@ -167,14 +204,15 @@ void main() {
       }
     });
 
-    test('429 throws ApiException.tooManyRequests and does NOT invoke onUnauthorized',
+    test('login 429 throws ApiException with login cooldown and does NOT invoke onUnauthorized',
         () async {
       var unauthorizedCalled = false;
       final client = _clientReturning(
           429, '{"message":"Too many login attempts. Please try again later."}',
           onUnauthorized: () => unauthorizedCalled = true);
       try {
-        await client.post('/auth/login', notifyUnauthorized: false);
+        await client.post('/auth/login',
+            notifyUnauthorized: false, isLoginRequest: true);
         fail('expected ApiException 429');
       } on ApiException catch (e) {
         expect(e.statusCode, 429);
@@ -184,7 +222,7 @@ void main() {
           reason: 'M9.6 M: rate limiting must never trigger the logout hook');
     });
 
-    test('429 without a body message falls back to the fixed safe string',
+    test('non-login 429 without a body message falls back to the generic rate-limit message',
         () async {
       var unauthorizedCalled = false;
       final client = _clientReturning(429, '',
@@ -194,9 +232,39 @@ void main() {
         fail('expected ApiException 429');
       } on ApiException catch (e) {
         expect(e.statusCode, 429);
-        expect(e.message, kTooManyRequestsMessage);
+        expect(e.message, kRateLimitedMessage);
         expect(unauthorizedCalled, isFalse,
-            reason: 'M9.6 M: no status reset/cooldown may fire the logout hook');
+            reason: 'M9.14: a non-login 429 must never fire the logout hook');
+      }
+    });
+
+    test('non-login 429 ignores backend body text and shows the generic rate-limit message',
+        () async {
+      var unauthorizedCalled = false;
+      final client = _clientReturning(
+          429, '{"message":"Some unrelated limit"}',
+          onUnauthorized: () => unauthorizedCalled = true);
+      try {
+        await client.get('/x');
+        fail('expected ApiException 429');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 429);
+        expect(e.message, kRateLimitedMessage);
+        expect(e.message, isNot(contains('login')));
+      }
+      expect(unauthorizedCalled, isFalse);
+    });
+
+    test('login 429 without a body message falls back to the login cooldown string',
+        () async {
+      final client = _clientReturning(429, '');
+      try {
+        await client.post('/auth/login',
+            notifyUnauthorized: false, isLoginRequest: true);
+        fail('expected ApiException 429');
+      } on ApiException catch (e) {
+        expect(e.statusCode, 429);
+        expect(e.message, kTooManyRequestsMessage);
       }
     });
 
@@ -225,6 +293,113 @@ void main() {
       } on ApiException catch (e) {
         expect(e.statusCode, -1);
       }
+    });
+  });
+
+  group('ApiClient timeout (M9.14)', () {
+    ApiClient slowClient({void Function()? onUnauthorized}) {
+      return ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        onUnauthorized: onUnauthorized,
+        timeout: const Duration(milliseconds: 50),
+        fileTimeout: const Duration(milliseconds: 50),
+        httpClient: _DelayedClient(const Duration(milliseconds: 300)),
+      );
+    }
+
+    test('GET timeout maps to ApiException.timeout (-2)', () async {
+      try {
+        await slowClient().get('/x');
+        fail('expected ApiException.timeout');
+      } on ApiException catch (e) {
+        expect(e.statusCode, kTimeoutStatusCode);
+        expect(e.message, kTimeoutMessage);
+      }
+    });
+
+    test('POST timeout maps to ApiException.timeout (-2)', () async {
+      try {
+        await slowClient().post('/x', body: {'a': 1});
+        fail('expected ApiException.timeout');
+      } on ApiException catch (e) {
+        expect(e.statusCode, kTimeoutStatusCode);
+      }
+    });
+
+    test('getBytes timeout maps to ApiException.timeout (-2)', () async {
+      try {
+        await slowClient()
+            .getBytes('/hod/reports/daily-lecture/export.xlsx');
+        fail('expected ApiException.timeout');
+      } on ApiException catch (e) {
+        expect(e.statusCode, kTimeoutStatusCode);
+      }
+    });
+
+    test('postMultipart timeout maps to ApiException.timeout (-2)', () async {
+      try {
+        await slowClient().postMultipart('/admin/students/import',
+            field: 'file', filename: 'students.csv', bytes: const [1, 2, 3]);
+        fail('expected ApiException.timeout');
+      } on ApiException catch (e) {
+        expect(e.statusCode, kTimeoutStatusCode);
+      }
+    });
+
+    test('timeout never invokes onUnauthorized', () async {
+      var unauthorizedCalled = false;
+      try {
+        await slowClient(onUnauthorized: () => unauthorizedCalled = true)
+            .get('/x');
+        fail('expected ApiException.timeout');
+      } on ApiException {
+        // expected
+      }
+      expect(unauthorizedCalled, isFalse,
+          reason: 'M9.14: a timeout is a connectivity problem, not a logout trigger');
+    });
+
+    test('ONE overall budget bounds the whole operation, not per-phase',
+        () async {
+      // send (80 ms) and body consumption (80 ms) are each within a 100 ms
+      // per-phase window, but together they exceed the single 100 ms total
+      // budget. A per-phase .timeout() chain would let this succeed; the M9.14
+      // single-budget contract must time it out.
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        timeout: const Duration(milliseconds: 100),
+        fileTimeout: const Duration(milliseconds: 100),
+        httpClient: _SlowBodyClient(
+            const Duration(milliseconds: 80), const Duration(milliseconds: 80)),
+      );
+      try {
+        await client.get('/x');
+        fail('expected ApiException.timeout from a single combined budget');
+      } on ApiException catch (e) {
+        expect(e.statusCode, kTimeoutStatusCode);
+        expect(e.message, kTimeoutMessage);
+      }
+    });
+
+    test('fast standard requests still succeed within a small budget',
+        () async {
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        timeout: const Duration(milliseconds: 50),
+        fileTimeout: const Duration(milliseconds: 50),
+        httpClient: _MockClient((req) => http.Response('{"ok":true}', 200)),
+      );
+      final result = await client.get('/x');
+      expect(result, {'ok': true});
+    });
+
+    test('default budgets remain 15s standard / 60s file transfers', () {
+      final client = ApiClient(baseUrl: 'http://test.local/api');
+      expect(client.timeout, kStandardRequestTimeout);
+      expect(client.fileTimeout, kFileTransferTimeout);
     });
   });
 

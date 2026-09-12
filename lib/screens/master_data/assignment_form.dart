@@ -62,6 +62,19 @@ class _TeacherAssignmentFormDialogState
 
   bool get _isEdit => widget.initial != null;
 
+  List<Teacher> get _selectableTeachers {
+    final currentTeacherId = widget.initial?.teacherId;
+    return [
+      for (final t in _teachers)
+        if (t.id != null &&
+            (t.status == 'ACTIVE' ||
+                (_isEdit &&
+                    currentTeacherId != null &&
+                    t.id == currentTeacherId)))
+          t,
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -99,7 +112,8 @@ class _TeacherAssignmentFormDialogState
           for (final program in programs)
             if (program.id != null) program.id!: program,
         };
-        _teacherId = widget.initial?.teacherId ?? _teachers.firstOrNull?.id;
+        _teacherId =
+            widget.initial?.teacherId ?? _selectableTeachers.firstOrNull?.id;
         _subjectOfferingId =
             widget.initial?.subjectOfferingId ?? _offerings.firstOrNull?.id;
         _sectionId = widget.initial?.sectionId ?? _sections.firstOrNull?.id;
@@ -233,8 +247,7 @@ class _TeacherAssignmentFormDialogState
             key: const Key('field-teacher'),
             label: 'Teacher',
             value: _teacherId,
-            items: _teachers
-                .where((t) => t.id != null)
+            items: _selectableTeachers
                 .map((t) => DropdownMenuItem(
                       value: t.id,
                       child: Text(

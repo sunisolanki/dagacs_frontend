@@ -143,6 +143,78 @@ void main() {
     expect(find.text('Section ID is required'), findsNothing);
   });
 
+  testWidgets('rejects an impossible calendar date (2024-02-31)',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    await tester.pumpWidget(MaterialApp(
+        home: CreateSessionScreen(
+            attendanceRepository: repo,
+            teacherRepository: _FakeTeacherRepository(),
+            preselectedAssignment: _sample)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), '1st');
+    await tester.enterText(find.byType(TextFormField).at(1), '2024-02-31');
+    await tester.ensureVisible(find.byKey(const Key('create-session-submit')));
+    await tester.tap(find.byKey(const Key('create-session-submit')));
+    await tester.pump();
+
+    expect(find.text('Enter a valid date (YYYY-MM-DD).'), findsOneWidget);
+  });
+
+  testWidgets('rejects a future date', (tester) async {
+    final now = DateTime.now();
+    final tomorrow =
+        DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+    final tomorrowStr = '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-'
+        '${tomorrow.day.toString().padLeft(2, '0')}';
+
+    final repo = _FakeAttendanceRepository();
+    await tester.pumpWidget(MaterialApp(
+        home: CreateSessionScreen(
+            attendanceRepository: repo,
+            teacherRepository: _FakeTeacherRepository(),
+            preselectedAssignment: _sample)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), '1st');
+    await tester.enterText(find.byType(TextFormField).at(1), tomorrowStr);
+    await tester.ensureVisible(find.byKey(const Key('create-session-submit')));
+    await tester.tap(find.byKey(const Key('create-session-submit')));
+    await tester.pump();
+
+    expect(find.text('Date cannot be in the future.'), findsOneWidget);
+  });
+
+  testWidgets('accepts today and a past date', (tester) async {
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    AttendanceSessionCreateRequest? seen;
+    final repo = _FakeAttendanceRepository()
+      ..onCreateSession = (request) async {
+        seen = request;
+        return const AttendanceSession(id: 70);
+      };
+    await tester.pumpWidget(MaterialApp(
+        home: CreateSessionScreen(
+            attendanceRepository: repo,
+            teacherRepository: _FakeTeacherRepository(),
+            preselectedAssignment: _sample)));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), '1st');
+    await tester.enterText(find.byType(TextFormField).at(1), todayStr);
+    await tester.ensureVisible(find.byKey(const Key('create-session-submit')));
+    await tester.tap(find.byKey(const Key('create-session-submit')));
+    await tester.pumpAndSettle();
+
+    expect(seen, isNotNull);
+    expect(seen!.date, todayStr);
+    expect(find.text('Enter a valid date (YYYY-MM-DD).'), findsNothing);
+    expect(find.text('Date cannot be in the future.'), findsNothing);
+  });
+
   testWidgets('removes manual Subject/Section entry and old banner',
       (tester) async {
     final repo = _FakeAttendanceRepository();

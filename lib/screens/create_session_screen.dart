@@ -286,9 +286,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       onPressed: _pickDate,
                     ),
                     onTap: _pickDate,
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Date is required'
-                        : null,
+                    validator: _validateDate,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: DagacsSpace.xs),
@@ -335,6 +333,21 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         ),
       ),
     );
+  }
+
+  /// M9.13: calendar-accurate, strict YYYY-MM-DD, and not in the future.
+  static String? _validateDate(String? value) {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return 'Date is required';
+    final parsed = DateTime.tryParse(trimmed);
+    if (parsed == null) return 'Enter a valid date (YYYY-MM-DD).';
+    final normalized =
+        '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
+    if (normalized != trimmed) return 'Enter a valid date (YYYY-MM-DD).';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    if (parsed.isAfter(today)) return 'Date cannot be in the future.';
+    return null;
   }
 
   /// Class selection area: locked preselected class, assignment dropdown, or

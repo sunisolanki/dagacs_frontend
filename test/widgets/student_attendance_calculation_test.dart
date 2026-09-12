@@ -366,4 +366,242 @@ void main() {
     expect(find.text('Absent'), findsOneWidget);
     expect(find.textContaining('Unable to connect'), findsOneWidget);
   });
+
+  group('isInvertedDateRange (M9.14)', () {
+    final d1 = DateTime(2026, 9, 1);
+    final d2 = DateTime(2026, 9, 2);
+
+    test('false when either bound is null', () {
+      expect(isInvertedDateRange(null, null), isFalse);
+      expect(isInvertedDateRange(d1, null), isFalse);
+      expect(isInvertedDateRange(null, d2), isFalse);
+    });
+
+    test('false when the bounds are equal (single-day filter is valid)', () {
+      expect(isInvertedDateRange(d1, d1), isFalse);
+    });
+
+    test('false when start is before end', () {
+      expect(isInvertedDateRange(d1, d2), isFalse);
+    });
+
+    test('true when start is after end', () {
+      expect(isInvertedDateRange(d2, d1), isTrue);
+    });
+  });
+
+  Future<void> _tapPickerDay(WidgetTester tester, int day) async {
+    await tester.tap(find.descendant(
+      of: find.byType(CalendarDatePicker),
+      matching: find.text('$day'),
+    ));
+    await tester.pumpAndSettle();
+  }
+
+  String? _buttonLabel(WidgetTester tester, Key key) =>
+      tester
+          .widget<Text>(find.descendant(
+            of: find.byKey(key),
+            matching: find.byType(Text),
+          ))
+          .data;
+
+  testWidgets(
+      'invalid end-before-start keeps the previous end date and issues no request',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    repo.onGetMyAttendance = () async => _records;
+    repo.onGetOverall = () async =>
+        (const AttendancePercentage(presentCount: 5, totalRecordedCount: 8, percentage: 62.5));
+    repo.onGetSubject = (_) async =>
+        (const AttendancePercentage(presentCount: 1, totalRecordedCount: 1, percentage: 100.0));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // Valid equal pair on the 2nd of the current month (day 2 always exists).
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 2);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(repo.lastOverallStartDate, isNotNull);
+
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 2);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(repo.lastOverallEndDate, isNotNull);
+
+    final endLabelBefore = _buttonLabel(tester, const Key('end-date-button'));
+    final startAfterValidPair = repo.lastOverallStartDate;
+    final endAfterValidPair = repo.lastOverallEndDate;
+    final subjectBase = repo.subjectRequestCount;
+
+    // Attempt an inverted end (day 1 is before start day 2).
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 1);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('date-range-error')), findsOneWidget);
+    expect(find.text(kInvertedDateRangeMessage), findsOneWidget);
+    expect(_buttonLabel(tester, const Key('end-date-button')), endLabelBefore,
+        reason: 'M9.14: the offending end bound must stay unmutated on an invalid pick');
+    expect(repo.lastOverallStartDate, startAfterValidPair,
+        reason: 'M9.14: an invalid pick must not trigger a new calculation request');
+    expect(repo.lastOverallEndDate, endAfterValidPair);
+    expect(repo.subjectRequestCount, subjectBase);
+  });
+
+  testWidgets(
+      'invalid start-after-end keeps the previous start date and issues no request',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    repo.onGetMyAttendance = () async => _records;
+    repo.onGetOverall = () async =>
+        (const AttendancePercentage(presentCount: 5, totalRecordedCount: 8, percentage: 62.5));
+    repo.onGetSubject = (_) async =>
+        (const AttendancePercentage(presentCount: 1, totalRecordedCount: 1, percentage: 100.0));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // Valid ordered pair: start = day 1, end = day 2.
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 1);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(repo.lastOverallStartDate, isNotNull);
+
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 2);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(repo.lastOverallEndDate, isNotNull);
+
+    final startLabelBefore =
+        _buttonLabel(tester, const Key('start-date-button'));
+    final startAfterValidPair = repo.lastOverallStartDate;
+    final endAfterValidPair = repo.lastOverallEndDate;
+    final subjectBase = repo.subjectRequestCount;
+
+    // Attempt an inverted start (day 3 is after end day 2).
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 3);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('date-range-error')), findsOneWidget);
+    expect(find.text(kInvertedDateRangeMessage), findsOneWidget);
+    expect(_buttonLabel(tester, const Key('start-date-button')), startLabelBefore,
+        reason: 'M9.14: the offending start bound must stay unmutated on an invalid pick');
+    expect(repo.lastOverallStartDate, startAfterValidPair,
+        reason: 'M9.14: an invalid pick must not trigger a new calculation request');
+    expect(repo.lastOverallEndDate, endAfterValidPair);
+    expect(repo.subjectRequestCount, subjectBase);
+  });
+
+  testWidgets('equal start and end range is accepted and issues the request',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    repo.onGetMyAttendance = () async => _records;
+    repo.onGetOverall = () async =>
+        (const AttendancePercentage(presentCount: 5, totalRecordedCount: 8, percentage: 62.5));
+    repo.onGetSubject = (_) async =>
+        (const AttendancePercentage(presentCount: 1, totalRecordedCount: 1, percentage: 100.0));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastOverallEndDate, isNotNull);
+    expect(repo.lastOverallStartDate, repo.lastOverallEndDate);
+    expect(repo.subjectRequestCount, greaterThan(0));
+    expect(find.byKey(const Key('date-range-error')), findsNothing);
+  });
+
+  testWidgets('ordered start-before-end range is accepted and issues the request',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    repo.onGetMyAttendance = () async => _records;
+    repo.onGetOverall = () async =>
+        (const AttendancePercentage(presentCount: 5, totalRecordedCount: 8, percentage: 62.5));
+    repo.onGetSubject = (_) async =>
+        (const AttendancePercentage(presentCount: 1, totalRecordedCount: 1, percentage: 100.0));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // Start on the first day of the current month (always present in the grid).
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 1);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    // End = today (OK default). If today is the 1st, pick day 2 instead so the
+    // range stays strictly ordered.
+    final today = DateTime.now();
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    if (today.day <= 1) {
+      await _tapPickerDay(tester, 2);
+    }
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastOverallEndDate, isNotNull);
+    expect(repo.lastOverallStartDate!.isBefore(repo.lastOverallEndDate!),
+        isTrue,
+        reason: 'M9.14: a strictly ordered range must be accepted');
+    expect(find.byKey(const Key('date-range-error')), findsNothing);
+  });
+
+  testWidgets('date-range error clears when dates are cleared',
+      (tester) async {
+    final repo = _FakeAttendanceRepository();
+    repo.onGetMyAttendance = () async => _records;
+    repo.onGetOverall = () async =>
+        (const AttendancePercentage(presentCount: 5, totalRecordedCount: 8, percentage: 62.5));
+    repo.onGetSubject = (_) async =>
+        (const AttendancePercentage(presentCount: 1, totalRecordedCount: 1, percentage: 100.0));
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    // Create a rejected inverted range (start = today, end = day 1).
+    await tester.tap(find.byKey(const Key('start-date-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('end-date-button')));
+    await tester.pumpAndSettle();
+    await _tapPickerDay(tester, 1);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('date-range-error')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('clear-dates-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('date-range-error')), findsNothing);
+    expect(repo.lastOverallStartDate, isNull);
+    expect(repo.lastOverallEndDate, isNull);
+  });
 }

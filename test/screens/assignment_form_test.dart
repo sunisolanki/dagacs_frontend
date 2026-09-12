@@ -8,6 +8,7 @@ import 'package:dagacs_frontend/models/subject_offering.dart';
 import 'package:dagacs_frontend/models/teacher.dart';
 import 'package:dagacs_frontend/models/teacher_assignment.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
+import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/master_data_repository.dart';
 import 'package:dagacs_frontend/screens/master_data/assignment_form.dart';
 import 'package:flutter/material.dart';
@@ -20,10 +21,25 @@ class _CapturingRepo extends MasterDataRepository {
   int? assignmentUpdateId;
   int? reenterAfterSubmit;
 
+  Object? failError;
+
   @override
   Future<List<Teacher>> getTeachers() async => const [
-        Teacher(id: 1, fullName: 'Dr A Sharma', designation: 'Professor'),
-        Teacher(id: 2, fullName: 'Dr B Gupta', designation: 'Associate'),
+        Teacher(
+            id: 3,
+            fullName: 'Dr Retired',
+            designation: 'Professor',
+            status: 'INACTIVE'),
+        Teacher(
+            id: 1,
+            fullName: 'Dr A Sharma',
+            designation: 'Professor',
+            status: 'ACTIVE'),
+        Teacher(
+            id: 2,
+            fullName: 'Dr B Gupta',
+            designation: 'Associate',
+            status: 'ACTIVE'),
       ];
 
   @override
@@ -79,6 +95,7 @@ class _CapturingRepo extends MasterDataRepository {
   @override
   Future<TeacherAssignment> createTeacherAssignment(
       TeacherAssignmentRequest request) async {
+    if (failError != null) throw failError!;
     assignmentReq = request;
     return const TeacherAssignment(
         id: 99, teacherId: 1, subjectOfferingId: 5, sectionId: 9);
@@ -87,6 +104,7 @@ class _CapturingRepo extends MasterDataRepository {
   @override
   Future<TeacherAssignment> updateTeacherAssignment(
       int id, TeacherAssignmentRequest request) async {
+    if (failError != null) throw failError!;
     assignmentUpdateId = id;
     assignmentReq = request;
     return const TeacherAssignment(
@@ -174,5 +192,70 @@ void main() {
     expect(repo.assignmentReq!.sectionId, 9);
     expect(repo.assignmentReq!.toJson().keys.toSet(),
         {'teacherId', 'subjectOfferingId', 'sectionId'});
+  });
+
+  testWidgets('assignment form create filters out inactive teachers',
+      (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo);
+
+    expect(find.byKey(const Key('field-teacher')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('field-teacher')));
+    await tester.pumpAndSettle();
+    expect(find.text('Dr Retired — Professor'), findsNothing);
+    expect(find.text('Dr A Sharma — Professor'), findsWidgets);
+    expect(find.text('Dr B Gupta — Associate'), findsOneWidget);
+  });
+
+  testWidgets(
+      'assignment form edit keeps an inactive current teacher selectable',
+      (tester) async {
+    final repo = _CapturingRepo();
+    await _open(
+      tester,
+      repo,
+      initial: const TeacherAssignment(
+          id: 7, teacherId: 3, subjectOfferingId: 5, sectionId: 9),
+    );
+
+    expect(find.text('Edit Teacher Assignment'), findsOneWidget);
+    expect(find.text('Dr Retired — Professor'), findsOneWidget);
+
+    await _submit(tester);
+
+    expect(repo.assignmentUpdateId, 7);
+    expect(repo.assignmentReq!.teacherId, 3);
+    expect(repo.assignmentReq!.toJson().keys.toSet(),
+        {'teacherId', 'subjectOfferingId', 'sectionId'});
+  });
+
+  testWidgets('assignment form create defaults to the first active teacher',
+      (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo);
+
+    expect(find.text('Dr A Sharma — Professor'), findsOneWidget);
+    await _submit(tester);
+
+    expect(repo.assignmentReq!.teacherId, 1);
+  });
+
+  testWidgets('assignment form edit renders the backend 409 message as the '
+      'submit error', (tester) async {
+    final repo = _CapturingRepo()
+      ..failError = const ApiException(
+          409, 'Cannot change assignment teacher while attendance history exists.');
+    await _open(
+      tester,
+      repo,
+      initial: const TeacherAssignment(
+          id: 7, teacherId: 2, subjectOfferingId: 5, sectionId: 9),
+    );
+
+    await _submit(tester);
+
+    expect(find.text(
+        'Cannot change assignment teacher while attendance history exists.'),
+        findsOneWidget);
   });
 }

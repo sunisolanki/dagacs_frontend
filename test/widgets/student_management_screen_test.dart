@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dagacs_frontend/core/session/session_controller.dart';
 import 'package:dagacs_frontend/models/auth_response.dart';
 import 'package:dagacs_frontend/models/batch.dart';
@@ -19,6 +21,7 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
 
   List<StudentManagement> students = const [];
   Object? getStudentsError;
+  int getStudentsCalls = 0;
 
   StudentManagementRequest? lastCreateRequest;
   int? lastUpdateId;
@@ -33,8 +36,14 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   int? lastPasswordId;
   String? lastPassword;
 
+  StudentImportResult? importResult;
+  ApiException? importError;
+  String? lastImportFilename;
+  List<int>? lastImportBytes;
+
   @override
   Future<List<StudentManagement>> getStudents() async {
+    getStudentsCalls++;
     if (getStudentsError != null) throw getStudentsError!;
     return students;
   }
@@ -92,6 +101,19 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
     return const StudentManagement(
         id: 1, loginLinked: true, loginStatus: 'ACTIVE');
   }
+
+  @override
+  Future<StudentImportResult> importStudents({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    lastImportFilename = filename;
+    lastImportBytes = bytes;
+    if (importError != null) throw importError!;
+    return importResult ??
+        const StudentImportResult(
+            totalRows: 1, importedRows: 1, rejectedRows: 0);
+  }
 }
 
 class _FakeMasterDataRepository extends MasterDataRepository {
@@ -104,12 +126,18 @@ class _FakeMasterDataRepository extends MasterDataRepository {
       ];
 
   @override
-  Future<List<Batch>> getBatches() async =>
-      const [Batch(id: 1, name: 'B1', batchCode: 'B1')];
+  Future<List<Batch>> getBatches() async => const [
+        Batch(id: 1, name: 'B1', batchCode: 'B1', program: 'Computer Science'),
+        Batch(id: 3, name: 'B3CS', batchCode: 'B3CS', program: 'Computer Science'),
+        Batch(id: 2, name: 'B2EE', batchCode: 'B2EE', program: 'Electrical'),
+      ];
 
   @override
-  Future<List<Section>> getSections() async =>
-      const [Section(id: 1, name: 'A', sectionCode: 'A')];
+  Future<List<Section>> getSections() async => const [
+        Section(id: 1, name: 'A', sectionCode: 'A', batchId: 1),
+        Section(id: 3, name: 'C', sectionCode: 'C', batchId: 3),
+        Section(id: 2, name: 'B', sectionCode: 'B', batchId: 2),
+      ];
 }
 
 class _FakeAuthRepository extends AuthRepository {
@@ -156,10 +184,13 @@ void _bigViewport(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-Widget _wrap(StudentManagementRepository repo) => MaterialApp(
+Widget _wrap(StudentManagementRepository repo,
+        {Future<PickedImportFile?> Function()? picker}) =>
+    MaterialApp(
       home: StudentManagementScreen(
         repository: repo,
         masterDataRepository: _FakeMasterDataRepository(),
+        pickImportFile: picker,
       ),
     );
 
@@ -358,6 +389,107 @@ void main() {
     expect(request.programId, 1);
     expect(request.batchId, 1);
     expect(request.sectionId, 1);
+  });
+
+  testWidgets('default program/batch/section selection is internally consistent',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository();
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('add-student')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-batch')),
+            matching: find.text('B1')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-section')),
+            matching: find.text('A')),
+        findsOneWidget);
+  });
+
+  testWidgets(
+      'program change re-filters batch and section; submit uses consistent triple',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository();
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('add-student')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-batch')),
+            matching: find.text('B1')),
+        findsOneWidget);
+
+    await _selectDropdown(tester, const Key('field-program'), 'Electrical');
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-batch')),
+            matching: find.text('B2EE')),
+        findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-section')),
+            matching: find.text('B')),
+        findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('field-rollNumber')), '2201EE001');
+    await tester.enterText(find.byKey(const Key('field-name')), 'Priya');
+    await _selectDropdown(tester, const Key('field-gender'), 'F');
+    await tester.ensureVisible(find.byKey(const Key('submit-student')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submit-student')));
+    await tester.pumpAndSettle();
+
+    final request = repo.lastCreateRequest;
+    expect(request, isNotNull);
+    expect(request!.programId, 2);
+    expect(request.batchId, 2);
+    expect(request.sectionId, 2);
+  });
+
+  testWidgets(
+      'batch change re-filters section; submit uses consistent triple',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository();
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('add-student')));
+    await tester.pumpAndSettle();
+
+    await _selectDropdown(tester, const Key('field-batch'), 'B3CS');
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('field-section')),
+            matching: find.text('C')),
+        findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(const Key('field-rollNumber')), '2201CS003');
+    await tester.enterText(find.byKey(const Key('field-name')), 'Sohan');
+    await _selectDropdown(tester, const Key('field-gender'), 'M');
+    await tester.ensureVisible(find.byKey(const Key('submit-student')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submit-student')));
+    await tester.pumpAndSettle();
+
+    final request = repo.lastCreateRequest;
+    expect(request, isNotNull);
+    expect(request!.programId, 1);
+    expect(request.batchId, 3);
+    expect(request.sectionId, 3);
   });
 
   testWidgets('basic validation blocks empty required fields', (tester) async {
@@ -594,5 +726,166 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Passwords do not match'), findsOneWidget);
     expect(repo.lastProvisionId, isNull);
+  });
+
+  testWidgets('import dialog requires a picked file before submitting',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active];
+    final callCount = () => repo.getStudentsCalls;
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('import-students')));
+    await tester.pumpAndSettle();
+    expect(find.text('Import Students'), findsOneWidget);
+    expect(find.textContaining('Program ID'), findsOneWidget);
+
+    // No file chosen yet - tapping submit does nothing.
+    await tester.tap(find.byKey(const Key('submit-import')));
+    await tester.pumpAndSettle();
+    expect(repo.lastImportFilename, isNull);
+
+    // Cancel leaves the dialog without importing.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(repo.lastImportFilename, isNull);
+    expect(callCount(), 1);
+  });
+
+  testWidgets('picking null cancels and keeps the dialog clean',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active];
+    await tester.pumpWidget(_wrap(repo, picker: () async => null));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('import-students')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pick-import-file')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('import-file-name')), findsNothing);
+  });
+
+  testWidgets('successful import shows summary and refreshes the list',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..importResult = const StudentImportResult(
+        totalRows: 2,
+        importedRows: 2,
+        rejectedRows: 0,
+        message: 'Imported 2 of 2 students.',
+      );
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+    ));
+    await tester.pumpAndSettle();
+    expect(repo.getStudentsCalls, 1);
+
+    await tester.tap(find.byKey(const Key('import-students')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pick-import-file')));
+    await tester.pumpAndSettle();
+    expect(find.text('students.xlsx'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('submit-import')));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastImportFilename, 'students.xlsx');
+    expect(repo.lastImportBytes, [1, 2, 3]);
+    expect(find.text('Import Complete'), findsOneWidget);
+    expect(find.text('Imported 2 of 2 students.'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('import-done')));
+    await tester.pumpAndSettle();
+    expect(find.text('Import Complete'), findsNothing);
+    expect(repo.getStudentsCalls, 2);
+  });
+
+  testWidgets('rejected import shows row errors and imports nothing',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..importResult = const StudentImportResult(
+        totalRows: 3,
+        importedRows: 0,
+        rejectedRows: 2,
+        message:
+            'Import failed: 2 row(s) rejected. No students were imported.',
+        errors: [
+          StudentImportError(
+              rowNumber: 3,
+              field: 'rollNumber',
+              message: 'Roll number already exists in this file: DUPR1',
+              status: 409),
+          StudentImportError(
+              rowNumber: 2, field: 'name', message: 'Name is required', status: 400),
+        ],
+      );
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.csv', bytes: Uint8List.fromList([9])),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('import-students')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pick-import-file')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submit-import')));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastImportFilename, 'students.csv');
+    expect(find.text('Import Failed'), findsOneWidget);
+    expect(find.textContaining('No students were imported'), findsOneWidget);
+    expect(find.text('Row 3:'), findsOneWidget);
+    expect(find.textContaining('Roll number already exists'), findsOneWidget);
+    expect(find.text('Row 2:'), findsOneWidget);
+    expect(find.textContaining('Name is required'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('import-done')));
+    await tester.pumpAndSettle();
+    expect(find.text('Import Failed'), findsNothing);
+    expect(repo.getStudentsCalls, 1);
+  });
+
+  testWidgets('file-level import error surfaces in the dialog', (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..importError = const ApiException(
+          400, 'Header is missing required column(s): Email');
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.csv', bytes: Uint8List.fromList([4, 5])),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('import-students')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pick-import-file')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('submit-import')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Header is missing required column(s): Email'),
+        findsOneWidget);
+    expect(find.text('Import Failed'), findsNothing);
   });
 }

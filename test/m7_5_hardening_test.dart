@@ -201,4 +201,27 @@ void main() {
       expect(page.totalPages, 0);
     });
   });
+
+  group('M9.14 - timeout and 429 message mapping', () {
+    test('userMessageFor maps a timeout to the bounded-timeout text', () {
+      expect(userMessageFor(const ApiException.timeout()), kTimeoutMessage);
+      expect(userMessageFor(const ApiException.timeout()), isNot(contains('Unable to connect')));
+    });
+
+    test('userMessageFor keeps the carried 429 message (login vs generic throttle)',
+        () {
+      expect(userMessageFor(const ApiException.tooManyRequests()),
+          kTooManyRequestsMessage);
+      expect(
+          userMessageFor(const ApiException(429, kRateLimitedMessage)),
+          kRateLimitedMessage);
+      expect(userMessageFor(const ApiException(429, '')), kRateLimitedMessage);
+    });
+
+    test('userMessageFor never renders the login cooldown text for a generic 429',
+        () {
+      final generic = userMessageFor(const ApiException(429, kRateLimitedMessage));
+      expect(generic, isNot(contains('login')));
+    });
+  });
 }

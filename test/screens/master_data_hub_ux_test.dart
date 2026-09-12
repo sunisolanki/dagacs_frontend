@@ -30,11 +30,16 @@ class _FakeAuthRepository extends AuthRepository {
 class _FakeMasterDataRepository extends MasterDataRepository {
   _FakeMasterDataRepository() : super(ApiClient());
 
+  int getDepartmentsCalls = 0;
+
   @override
-  Future<List<Department>> getDepartments() async => const [
-        Department(id: 1, name: 'Computer Science', code: 'CS'),
-        Department(id: 2, name: 'Electronics', code: 'EC'),
-      ];
+  Future<List<Department>> getDepartments() async {
+    getDepartmentsCalls++;
+    return const [
+      Department(id: 1, name: 'Computer Science', code: 'CS'),
+      Department(id: 2, name: 'Electronics', code: 'EC'),
+    ];
+  }
 
   @override
   Future<List<Program>> getPrograms() async =>
@@ -97,6 +102,45 @@ Future<void> _pumpAdminHub(WidgetTester tester,
       teacherManagementRepository: _FakeTeacherManagementRepository(),
       session: session,
     ),
+  ));
+  await tester.pumpAndSettle();
+}
+
+/// M9.14: pumps the hub inside a navigator that can push a stub entity route,
+/// so a card tap can be awaited and the return-from-CRUD refresh observed.
+Future<void> _pumpAdminHubWithRoutes(WidgetTester tester,
+    _FakeMasterDataRepository repository) async {
+  final session = SessionController(_FakeAuthRepository());
+  session.establishSession('ADMIN');
+  await tester.pumpWidget(MaterialApp(
+    initialRoute: '/master-data',
+    onGenerateRoute: (settings) {
+      switch (settings.name) {
+        case '/master-data':
+          return MaterialPageRoute(
+              builder: (_) => MasterDataScreen(
+                    repository: repository,
+                    teacherManagementRepository:
+                        _FakeTeacherManagementRepository(),
+                    session: session,
+                  ));
+        case '/master-data/departments':
+          return MaterialPageRoute(
+              builder: (_) => Scaffold(
+                    body: Center(
+                      child: Builder(
+                        builder: (innerContext) => TextButton(
+                          key: const Key('back-to-hub'),
+                          onPressed: () => Navigator.of(innerContext).pop(),
+                          child: const Text('BACK'),
+                        ),
+                      ),
+                    ),
+                  ));
+        default:
+          return MaterialPageRoute(builder: (_) => const SizedBox());
+      }
+    },
   ));
   await tester.pumpAndSettle();
 }
@@ -193,5 +237,43 @@ void main() {
         expect(find.byKey(Key(key)), findsOneWidget);
       }
     }
+  });
+
+  testWidgets('counts refresh exactly once after returning from a pushed CRUD route',
+      (tester) async {
+    final repo = _FakeMasterDataRepository();
+    await _pumpAdminHubWithRoutes(tester, repo);
+
+    expect(repo.getDepartmentsCalls, 1,
+        reason: 'initial load performs a single count fetch');
+
+    await tester.tap(find.byKey(const Key('master-data-departments')));
+    await tester.pumpAndSettle();
+    expect(find.text('BACK'), findsOneWidget);
+    expect(repo.getDepartmentsCalls, 1,
+        reason: 'M9.14: no refresh while the entity route is still open');
+
+    await tester.tap(find.byKey(const Key('back-to-hub')));
+    await tester.pumpAndSettle();
+
+    expect(repo.getDepartmentsCalls, 2,
+        reason: 'M9.14: counts refresh exactly once on returning to the hub');
+    expect(find.text('Loading master data...'), findsNothing,
+        reason: 'M9.14: refresh is silent - no full-screen loader flash');
+    expect(find.byKey(const Key('master-data-departments')), findsOneWidget);
+  });
+
+  testWidgets('no refresh fires while the entity route is never popped',
+      (tester) async {
+    final repo = _FakeMasterDataRepository();
+    await _pumpAdminHubWithRoutes(tester, repo);
+    expect(repo.getDepartmentsCalls, 1);
+
+    await tester.tap(find.byKey(const Key('master-data-departments')));
+    await tester.pumpAndSettle();
+
+    expect(repo.getDepartmentsCalls, 1,
+        reason: 'M9.14: a still-open CRUD route must not trigger a hub refresh');
+    expect(find.text('BACK'), findsOneWidget);
   });
 }

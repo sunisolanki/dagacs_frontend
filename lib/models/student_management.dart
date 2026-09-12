@@ -164,3 +164,68 @@ class StudentManagementRequest {
         if (sectionId != null) 'sectionId': sectionId,
       };
 }
+
+/// M9.10 bulk student import summary (backend `StudentImportResult`).
+///
+/// The import is all-or-nothing on the server: when [rejectedRows] is non-zero,
+/// [importedRows] is always 0. [errors] carries one entry per rejected row with
+/// the physical file row number, the affected field, the validation message and
+/// the HTTP status that applies to that row (400 validation / 409 conflict).
+class StudentImportResult {
+  final int totalRows;
+  final int importedRows;
+  final int rejectedRows;
+  final String? message;
+  final List<StudentImportError> errors;
+
+  const StudentImportResult({
+    this.totalRows = 0,
+    this.importedRows = 0,
+    this.rejectedRows = 0,
+    this.message,
+    this.errors = const [],
+  });
+
+  factory StudentImportResult.fromJson(Map<String, dynamic> json) {
+    final rawErrors = json['errors'];
+    return StudentImportResult(
+      totalRows: (json['totalRows'] as num?)?.toInt() ?? 0,
+      importedRows: (json['importedRows'] as num?)?.toInt() ?? 0,
+      rejectedRows: (json['rejectedRows'] as num?)?.toInt() ?? 0,
+      message: json['message'] as String?,
+      errors: rawErrors is List
+          ? rawErrors
+              .whereType<Map>()
+              .map((e) =>
+                  StudentImportError.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+
+  bool get isSuccess => rejectedRows == 0;
+}
+
+/// One rejected row in an import summary.
+class StudentImportError {
+  final int rowNumber;
+  final String? field;
+  final String? message;
+  final int status;
+
+  const StudentImportError({
+    this.rowNumber = 0,
+    this.field,
+    this.message,
+    this.status = 0,
+  });
+
+  factory StudentImportError.fromJson(Map<String, dynamic> json) {
+    return StudentImportError(
+      rowNumber: (json['rowNumber'] as num?)?.toInt() ?? 0,
+      field: json['field'] as String?,
+      message: json['message'] as String?,
+      status: (json['status'] as num?)?.toInt() ?? 0,
+    );
+  }
+}

@@ -51,30 +51,10 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
       _error = null;
     });
     try {
-      final departments = await widget.repository.getDepartments();
-      final programs = await widget.repository.getPrograms();
-      final sessions = await widget.repository.getAcademicSessions();
-      final semesters = await widget.repository.getSemesters();
-      final batches = await widget.repository.getBatches();
-      final sections = await widget.repository.getSections();
-      final subjects = await widget.repository.getSubjects();
-      final offerings = await widget.repository.getSubjectOfferings();
-      final assignments = await widget.repository.getTeacherAssignments();
-      final teachers = await widget.teacherManagementRepository.getTeachers();
+      final counts = await _fetchCounts();
       if (!mounted) return;
       setState(() {
-        _counts = {
-          'departments': departments.length,
-          'programs': programs.length,
-          'academic-sessions': sessions.length,
-          'semesters': semesters.length,
-          'batches': batches.length,
-          'sections': sections.length,
-          'subjects': subjects.length,
-          'subject-offerings': offerings.length,
-          'teacher-assignments': assignments.length,
-          'teachers': teachers.length,
-        };
+        _counts = counts;
         _loading = false;
       });
     } on ApiException catch (e) {
@@ -90,6 +70,58 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// M9.14: silent count refresh after returning from a pushed CRUD route.
+  ///
+  /// Updates [counts] without flipping the full-screen loading state, so the
+  /// hub reflects edits the user just made. Failures keep the last-known counts
+  /// - the explicit load path owns the error state.
+  Future<void> _refreshCounts() async {
+    try {
+      final counts = await _fetchCounts();
+      if (!mounted) return;
+      setState(() => _counts = counts);
+    } on ApiException {
+      // keep last-known counts
+    } catch (_) {
+      // keep last-known counts
+    }
+  }
+
+  Future<Map<String, int>> _fetchCounts() async {
+    final departments = await widget.repository.getDepartments();
+    final programs = await widget.repository.getPrograms();
+    final sessions = await widget.repository.getAcademicSessions();
+    final semesters = await widget.repository.getSemesters();
+    final batches = await widget.repository.getBatches();
+    final sections = await widget.repository.getSections();
+    final subjects = await widget.repository.getSubjects();
+    final offerings = await widget.repository.getSubjectOfferings();
+    final assignments = await widget.repository.getTeacherAssignments();
+    final teachers = await widget.teacherManagementRepository.getTeachers();
+    return {
+      'departments': departments.length,
+      'programs': programs.length,
+      'academic-sessions': sessions.length,
+      'semesters': semesters.length,
+      'batches': batches.length,
+      'sections': sections.length,
+      'subjects': subjects.length,
+      'subject-offerings': offerings.length,
+      'teacher-assignments': assignments.length,
+      'teachers': teachers.length,
+    };
+  }
+
+  /// M9.14: pushes the entity route and, on the push future completing (i.e.
+  /// the entity flow popped all the way back to the hub), silently refreshes
+  /// the record counts. No navigation redesign - relies on the standard
+  /// Navigator pop contract.
+  Future<void> _openEntity(String route) async {
+    await Navigator.pushNamed(context, route);
+    if (!mounted) return;
+    await _refreshCounts();
   }
 
   @override
@@ -337,7 +369,7 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
               size: 20, color: DagacsColors.textSecondary),
         ],
       ),
-      onTap: () => Navigator.pushNamed(context, route),
+      onTap: () => _openEntity(route),
     );
   }
 }

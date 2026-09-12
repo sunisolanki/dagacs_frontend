@@ -118,6 +118,8 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Too many login attempts'), findsOneWidget);
+    expect(find.textContaining('Too many requests'), findsNothing,
+        reason: 'M9.14: login 429 must keep login cooldown wording, never the generic throttle text');
     expect(find.text('HOME-ROUTE'), findsNothing,
         reason: 'M9.6 M: a rate-limited login must not navigate forward');
     expect(session.isAuthenticated, isFalse,

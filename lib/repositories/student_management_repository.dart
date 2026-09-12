@@ -123,4 +123,30 @@ class StudentManagementRepository {
       rethrow;
     }
   }
+
+  /// Bulk-imports students from an uploaded .xlsx or .csv file (M9.10,
+  /// ADMIN-only). The backend performs all parsing and validation and, because
+  /// the import is all-or-nothing, either persists the whole file or none of
+  /// it. The returned [StudentImportResult] carries the SOW summary shape
+  /// (totals plus per-row errors). File-level problems arrive as [ApiException]
+  /// with the backend's human-readable message.
+  Future<StudentImportResult> importStudents({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    try {
+      final data = await _client.postMultipart(
+        '/admin/students/import',
+        field: 'file',
+        filename: filename,
+        bytes: bytes,
+      );
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentImportResult.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
 }
