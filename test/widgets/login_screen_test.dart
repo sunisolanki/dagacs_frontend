@@ -12,16 +12,16 @@ import 'package:flutter_test/flutter_test.dart';
 /// flow is exercised against the live backend in end-to-end verification.
 class _FakeAuthRepository extends AuthRepository {
   _FakeAuthRepository(this.onLogin, {this.delay = Duration.zero});
-  final AuthResponse Function(String email, String password) onLogin;
+  final AuthResponse Function(String identifier, String password) onLogin;
   final Duration delay;
   bool persistCalled = false;
 
   @override
-  Future<AuthResponse> login(String email, String password) async {
+  Future<AuthResponse> login(String identifier, String password) async {
     if (delay > Duration.zero) {
       await Future<void>.delayed(delay);
     }
-    return onLogin(email, password);
+    return onLogin(identifier, password);
   }
 
   @override
@@ -70,7 +70,7 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     await tester.tap(find.text('Sign In'));
     await tester.pump();
 
-    expect(find.text('Email is required'), findsOneWidget);
+    expect(find.text('Roll number or email is required'), findsOneWidget);
     expect(find.text('Password is required'), findsOneWidget);
   });
 
@@ -167,7 +167,7 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
         home: LoginScreen(authRepository: repo, session: session)));
 
     expect(find.text('Welcome back'), findsOneWidget);
-    expect(find.byKey(const Key('login-email')), findsOneWidget);
+    expect(find.byKey(const Key('login-identifier')), findsOneWidget);
     expect(find.byKey(const Key('login-password')), findsOneWidget);
     expect(find.text('DAGACS'), findsWidgets);
   });
@@ -217,7 +217,7 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     await tester.tap(find.text('Sign In'));
     await tester.pump();
 
-    expect(find.text('Email is required'), findsOneWidget);
+    expect(find.text('Roll number or email is required'), findsOneWidget);
     expect(find.text('Password is required'), findsNothing);
   });
 
@@ -233,7 +233,7 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     await tester.pump();
 
     expect(find.text('Password is required'), findsOneWidget);
-    expect(find.text('Email is required'), findsNothing);
+    expect(find.text('Roll number or email is required'), findsNothing);
   });
 
   testWidgets('login button is present using AppPrimaryButton',

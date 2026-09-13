@@ -20,12 +20,14 @@ class SessionController extends ChangeNotifier {
   String _role = 'STUDENT';
   String? _email;
   String? _fullName;
+  bool _mustChangePassword = false;
 
   bool get initialized => _initialized;
   bool get isAuthenticated => _isAuthenticated;
   String get role => _role;
   String? get email => _email;
   String? get fullName => _fullName;
+  bool get mustChangePassword => _mustChangePassword;
 
   /// Restores a persisted session (JWT + role) after app restart.
   Future<void> restoreSession() async {
@@ -36,18 +38,29 @@ class SessionController extends ChangeNotifier {
       _role = await TokenService.getRole();
       _email = await TokenService.getEmail();
       _fullName = await TokenService.getFullName();
+      _mustChangePassword = await TokenService.getMustChangePassword() ?? false;
     }
     _initialized = true;
     notifyListeners();
   }
 
   /// Marks the session authenticated (called after a successful login).
-  void establishSession(String role, {String? email, String? fullName}) {
+  void establishSession(String role, {String? email, String? fullName, bool mustChangePassword = false}) {
     _isAuthenticated = true;
     _role = role;
     _email = email;
     _fullName = fullName;
+    _mustChangePassword = mustChangePassword;
     _initialized = true;
+    notifyListeners();
+  }
+
+  /// Records a successful forced password change (M10A). The session (JWT and
+  /// role) is deliberately kept - only the mustChangePassword flag clears and
+  /// is persisted, so the student flows straight into the app.
+  Future<void> completePasswordChange() async {
+    _mustChangePassword = false;
+    await TokenService.setMustChangePassword(false);
     notifyListeners();
   }
 
@@ -58,6 +71,7 @@ class SessionController extends ChangeNotifier {
     _role = 'STUDENT';
     _email = null;
     _fullName = null;
+    _mustChangePassword = false;
     notifyListeners();
   }
 }

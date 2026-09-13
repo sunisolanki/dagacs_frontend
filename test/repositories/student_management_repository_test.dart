@@ -293,4 +293,81 @@ void main() {
       expect(student.id, 1);
     });
   });
+
+  group('StudentManagementRepository.changePassword', () {
+    test('PUTs current and new password to student/change-password',
+        () async {
+      String? method;
+      String? seenPath;
+      Object? body;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'student-token',
+        httpClient: _MockClient((req) {
+          method = req.method;
+          seenPath = req.url.path;
+          body = jsonDecode(req.body);
+          return http.Response('{"success":true}', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      await repo.changePassword(
+        currentPassword: 'Temp#Old2026',
+        newPassword: 'BrandNew#2026',
+        confirmPassword: 'BrandNew#2026',
+      );
+      final bodyMap = body! as Map;
+      expect(method, 'PUT');
+      expect(seenPath, '/api/student/change-password');
+      expect(bodyMap['currentPassword'], 'Temp#Old2026');
+      expect(bodyMap['newPassword'], 'BrandNew#2026');
+      expect(bodyMap['confirmPassword'], 'BrandNew#2026');
+    });
+
+    test('propagates a 403 ApiException', () async {
+      final client = _clientReturning(403, '{"message":"Forbidden"}');
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.changePassword(
+          currentPassword: 'Temp#Old2026',
+          newPassword: 'BrandNew#2026',
+          confirmPassword: 'BrandNew#2026',
+        ),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 403)),
+      );
+    });
+  });
+
+  group('StudentManagementRepository.downloadCredentials', () {
+    test('GETs the credential artifact and returns bytes + filename',
+        () async {
+      String? seenPath;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          return http.Response.bytes(
+            [1, 2, 3, 4],
+            200,
+            headers: {
+              'content-type':
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'content-disposition':
+                  'attachment; filename="student_credentials.xlsx"',
+            },
+          );
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      final payload =
+          await repo.downloadCredentials('dl-abcd-1234');
+      expect(seenPath, '/api/admin/students/import/credentials/dl-abcd-1234');
+      expect(payload.bytes, [1, 2, 3, 4]);
+      expect(payload.fileName, 'student_credentials.xlsx');
+      expect(payload.contentType, contains('spreadsheetml.sheet'));
+    });
+  });
 }

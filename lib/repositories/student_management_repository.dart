@@ -1,3 +1,6 @@
+import 'package:http/http.dart' as http;
+
+import '../models/report_export.dart';
 import '../models/student_management.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
@@ -122,6 +125,49 @@ class StudentManagementRepository {
     } on ApiException {
       rethrow;
     }
+  }
+
+  /// Changes the authenticated student's own password (M10A). Identity comes
+  /// only from the JWT; the backend verifies [currentPassword] against the
+  /// persisted hash before applying [newPassword].
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final data = await _client.put('/student/change-password', body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      });
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  /// Downloads the one-time bulk-import credential artifact (XLSX) by id
+  /// (M10A). The backend enforces single-download semantics: a second attempt
+  /// returns 409 (surfaced as a typed [ApiException] by [ApiClient.getBytes]).
+  Future<DownloadPayload> downloadCredentials(String downloadId) async {
+    final http.Response response = await _client
+        .getBytes('/admin/students/import/credentials/$downloadId');
+    return DownloadPayload(
+      bytes: response.bodyBytes,
+      fileName: _fileNameFromDisposition(response.headers['content-disposition']) ??
+          'student_credentials.xlsx',
+      contentType: response.headers['content-type'],
+    );
+  }
+
+  static String? _fileNameFromDisposition(String? disposition) {
+    if (disposition == null || disposition.isEmpty) return null;
+    final match = RegExp(r'filename="?([^";]+)"?')
+        .firstMatch(disposition);
+    return match?.group(1);
   }
 
   /// Bulk-imports students from an uploaded .xlsx or .csv file (M9.10,

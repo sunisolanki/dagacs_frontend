@@ -10,6 +10,7 @@ class AppRoutes {
   static const String markAttendance = '/teacher/attendance/mark';
   static const String studentAttendance = '/student/attendance';
   static const String studentProfile = '/student/profile';
+  static const String studentChangePassword = '/student/change-password';
   static const String adminStudents = '/admin/students';
   static const String hodDashboard = '/hod/dashboard';
   static const String hodReports = '/hod/reports';

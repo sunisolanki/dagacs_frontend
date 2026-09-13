@@ -28,15 +28,33 @@ void main() {
     expect(session.fullName, 'HOD');
   });
 
+  test('establishSession sets mustChangePassword flag', () {
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('STUDENT',
+        email: 's@dagacs.local',
+        fullName: 'Student',
+        mustChangePassword: true);
+    expect(session.mustChangePassword, isTrue);
+  });
+
+  test('establishSession defaults mustChangePassword to false', () {
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('ADMIN');
+    expect(session.mustChangePassword, isFalse);
+  });
+
   test('clearSession resets to unauthenticated and notifies listeners', () async {
     final session = SessionController(_FakeAuthRepository());
     var notified = 0;
     session.addListener(() => notified++);
-    session.establishSession('TEACHER');
+    session.establishSession('TEACHER',
+        mustChangePassword: true);
+    expect(session.mustChangePassword, isTrue);
     await session.clearSession();
     expect(session.isAuthenticated, isFalse);
     expect(session.role, 'STUDENT');
     expect(session.email, isNull);
+    expect(session.mustChangePassword, isFalse);
     expect(notified, greaterThanOrEqualTo(2));
   });
 }

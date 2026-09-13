@@ -17,12 +17,14 @@ class TokenService {
   static const String _roleKey = 'user_role';
   static const String _emailKey = 'user_email';
   static const String _fullNameKey = 'user_full_name';
+  static const String _mustChangePasswordKey = 'must_change_password';
 
   static Future<void> saveSession(
       {required String token,
       required String role,
       String? email,
-      String? fullName}) async {
+      String? fullName,
+      bool mustChangePassword = false}) async {
     await _secureStorage.write(key: _tokenKey, value: token);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_roleKey, role);
@@ -32,6 +34,20 @@ class TokenService {
     if (fullName != null) {
       await prefs.setString(_fullNameKey, fullName);
     }
+    await prefs.setBool(_mustChangePasswordKey, mustChangePassword);
+  }
+
+  static Future<bool?> getMustChangePassword() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_mustChangePasswordKey);
+  }
+
+  /// Persists the forced password-change flag (M10A). Called after a successful
+  /// change so routing no longer forces the change screen, while the JWT and
+  /// the rest of the session stay intact.
+  static Future<void> setMustChangePassword(bool mustChangePassword) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_mustChangePasswordKey, mustChangePassword);
   }
 
   static Future<String?> getToken() async {

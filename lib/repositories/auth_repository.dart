@@ -9,10 +9,10 @@ class AuthRepository {
 
   final ApiClient _client;
 
-  Future<AuthResponse> login(String email, String password) async {
+  Future<AuthResponse> login(String identifier, String password) async {
     try {
       final data = await _client.post('/auth/login', body: {
-        'email': email,
+        'identifier': identifier,
         'password': password,
       }, notifyUnauthorized: false, isLoginRequest: true);
       if (data is! Map) {
@@ -32,6 +32,7 @@ class AuthRepository {
       role: role,
       email: auth.email,
       fullName: auth.fullName,
+      mustChangePassword: auth.mustChangePassword,
     );
   }
 

@@ -11,6 +11,7 @@ import '../models/student_management.dart';
 import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
 import '../repositories/student_management_repository.dart';
+import '../services/report_file_downloader.dart';
 import '../widgets/dagacs_widgets.dart';
 
 /// A file the admin selected for bulk import (name + in-memory bytes).
@@ -168,6 +169,8 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
             Navigator.of(dialogContext).pop(_StudentDetailAction.resetPassword),
         onToggleLogin: () =>
             Navigator.of(dialogContext).pop(_StudentDetailAction.toggleLogin),
+        onDownloadCredentials: () =>
+            Navigator.of(dialogContext).pop(_StudentDetailAction.downloadCredentials),
       ),
     );
     if (action == null || !mounted) return;
@@ -182,6 +185,8 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
     } else if (action == _StudentDetailAction.toggleLogin) {
       await _setLoginStatus(
           student, student.loginIsActive ? 'INACTIVE' : 'ACTIVE');
+    } else if (action == _StudentDetailAction.downloadCredentials) {
+      await _downloadCredentials(student);
     }
   }
 
@@ -220,6 +225,31 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
     } on ApiException catch (e) {
       await _showError(
           'Could not create the login. ${_reasonFor(e)} Please try again.');
+    }
+  }
+
+  Future<void> _downloadCredentials(StudentManagement student) async {
+    final downloadId = student.credentialDownloadId;
+    if (downloadId == null || downloadId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No credentials available for download.')),
+      );
+      return;
+    }
+    try {
+      final payload = await widget.repository.downloadCredentials(downloadId);
+      if (!mounted) return;
+      final status = await downloadReportFile(
+          payload.bytes, payload.fileName, payload.contentType);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(status)));
+    } on ApiException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to download credentials.')),
+      );
     }
   }
 
@@ -454,6 +484,13 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                           : 'NO LOGIN',
                       active: hasLogin && student.loginIsActive,
                     ),
+                    if (student.mustChangePassword == true) ...[
+                      const SizedBox(height: 4),
+                      AppStatusBadge(
+                        label: 'PASSWORD RESET',
+                        active: false,
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(width: 2),
@@ -467,7 +504,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 }
 
-enum _StudentDetailAction { edit, toggle, createLogin, resetPassword, toggleLogin }
+enum _StudentDetailAction { edit, toggle, createLogin, resetPassword, toggleLogin, downloadCredentials }
 
 class _StudentDetailDialog extends StatelessWidget {
   const _StudentDetailDialog({
@@ -477,6 +514,7 @@ class _StudentDetailDialog extends StatelessWidget {
     required this.onCreateLogin,
     required this.onResetPassword,
     required this.onToggleLogin,
+    required this.onDownloadCredentials,
   });
 
   final StudentManagement student;
@@ -485,6 +523,7 @@ class _StudentDetailDialog extends StatelessWidget {
   final VoidCallback onCreateLogin;
   final VoidCallback onResetPassword;
   final VoidCallback onToggleLogin;
+  final VoidCallback onDownloadCredentials;
 
   bool get _hasLogin => student.hasLogin;
 
@@ -552,6 +591,41 @@ class _StudentDetailDialog extends StatelessWidget {
           const SizedBox(height: 8),
           row('Linked', _hasLogin ? 'Yes' : 'No'),
           if (_hasLogin) row('Login Status', student.loginStatus),
+          if (student.mustChangePassword == true) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.lock_open, size: 16, color: DagacsColors.brandPrimary),
+                const SizedBox(width: DagacsSpace.sm),
+                Text(
+                  'Must change password on first login',
+                  style: TextStyle(
+                    color: DagacsColors.brandPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (student.temporaryPassword != null && student.temporaryPassword!.isNotEmpty) ...[
+            const Divider(height: 28),
+            Text('Temporary Credentials',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            row('Temporary Password', student.temporaryPassword),
+          ],
+          if (student.credentialDownloadId != null && student.credentialDownloadId!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              key: const Key('detail-download-credentials'),
+              onPressed: onDownloadCredentials,
+              child: const Text('Download Credentials (XLSX)'),
+            ),
+          ],
           const SizedBox(height: DagacsSpace.sm),
           Wrap(
             spacing: DagacsSpace.sm,

@@ -4,72 +4,83 @@ import '../core/navigation/navigator.dart';
 import '../core/session/session_controller.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../network/api_exception.dart';
-import '../repositories/auth_repository.dart';
+import '../repositories/student_management_repository.dart';
 import '../widgets/dagacs_widgets.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen(
-      {super.key, required this.authRepository, required this.session});
+/// Forced first-login password change screen (M10A).
+///
+/// Shown automatically after login when [mustChangePassword] is true.
+/// The student must verify the current password and set a new one; on success
+/// the session is kept (no logout) and the student continues into the app.
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({
+    super.key,
+    required this.session,
+    required this.repository,
+  });
 
-  final AuthRepository authRepository;
   final SessionController session;
+  final StudentManagementRepository repository;
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _identifierController = TextEditingController();
+  final _currentController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _identifierFocus = FocusNode();
-  final _passwordFocus = FocusNode();
-  bool _isLoading = false;
+  final _confirmController = TextEditingController();
   bool _obscure = true;
+  bool _isLoading = false;
   String? _error;
 
   @override
   void dispose() {
-    _identifierController.dispose();
+    _currentController.dispose();
     _passwordController.dispose();
-    _identifierFocus.dispose();
-    _passwordFocus.dispose();
+    _confirmController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final newPassword = _passwordController.text.trim();
+    if (newPassword != _confirmController.text.trim()) {
+      setState(() {
+        _error = 'Passwords do not match.';
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
     });
-
     try {
-      final auth = await widget.authRepository
-          .login(_identifierController.text.trim(), _passwordController.text);
-      await widget.authRepository.persistSession(auth);
-      widget.session.establishSession(
-        auth.role ?? 'STUDENT',
-        email: auth.email,
-        fullName: auth.fullName,
-        mustChangePassword: auth.mustChangePassword,
+      await widget.repository.changePassword(
+        currentPassword: _currentController.text.trim(),
+        newPassword: newPassword,
+        confirmPassword: _confirmController.text.trim(),
       );
       if (!mounted) return;
-      if (auth.mustChangePassword) {
-        Navigator.pushReplacementNamed(context, AppRoutes.studentChangePassword);
-      } else {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
+      await widget.session.completePasswordChange();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password updated. Welcome to DAGACS.'),
+        ),
+      );
+      Navigator.pushReplacementNamed(context, AppRoutes.home);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.statusCode == 401 ? 'Invalid email or password.' : userMessageFor(e);
+        _error = e.message;
         _isLoading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Login failed. Please try again.';
+        _error = 'Something went wrong. Please try again.';
         _isLoading = false;
       });
     }
@@ -117,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 const SizedBox(width: DagacsSpace.xxl),
                                 SizedBox(
                                   width: 380,
-                                  child: _buildLoginCard(),
+                                  child: _buildChangePasswordCard(),
                                 ),
                               ],
                             ),
@@ -127,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               _buildBrandHeader(),
                               const SizedBox(height: DagacsSpace.xxl),
-                              _buildLoginCard(),
+                              _buildChangePasswordCard(),
                             ],
                           ),
                   ),
@@ -199,25 +210,15 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           SizedBox(height: DagacsSpace.xxxl),
           _BrandFeature(
-            icon: Icons.fact_check_outlined,
-            text: 'Attendance governance for the whole department',
-          ),
-          SizedBox(height: DagacsSpace.lg),
-          _BrandFeature(
-            icon: Icons.admin_panel_settings_outlined,
-            text: 'Role-aware access for admin, HOD, teachers and students',
-          ),
-          SizedBox(height: DagacsSpace.lg),
-          _BrandFeature(
-            icon: Icons.analytics_outlined,
-            text: 'Compliance analytics and exportable reports',
+            icon: Icons.security_outlined,
+            text: 'First-login security requires a password change',
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLoginCard() {
+  Widget _buildChangePasswordCard() {
     final theme = Theme.of(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -245,41 +246,28 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Welcome back', style: theme.textTheme.titleLarge),
+              const Icon(Icons.lock_reset, size: 48, color: DagacsColors.brandPrimary),
+              const SizedBox(height: DagacsSpace.md),
+              Text(
+                'Change Your Password',
+                style: theme.textTheme.titleLarge,
+              ),
               const SizedBox(height: DagacsSpace.xs),
               Text(
-                'Sign in to your DAGACS account',
+                'This is your first login. Verify your current password and set a new one.',
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: DagacsSpace.xl),
+              const SizedBox(height: DagacsSpace.lg),
               AppFormTextField(
-                key: const Key('login-identifier'),
-                label: 'Roll Number or Email',
-                controller: _identifierController,
-                keyboardType: TextInputType.emailAddress,
-                prefixIcon: Icons.badge_outlined,
-                textInputAction: TextInputAction.next,
-                autofocus: true,
-                onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Roll number or email is required';
-                  }
-                  return null;
-                },
-              ),
-              AppFormTextField(
-                key: const Key('login-password'),
-                label: 'Password',
-                controller: _passwordController,
+                key: const Key('field-current-password'),
+                label: 'Current Password',
+                controller: _currentController,
                 obscureText: _obscure,
                 prefixIcon: Icons.lock_outline,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _handleLogin(),
-                autofocus: false,
+                textInputAction: TextInputAction.next,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Password is required';
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Current password is required';
                   }
                   return null;
                 },
@@ -291,6 +279,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   onPressed: () => setState(() => _obscure = !_obscure),
                 ),
+              ),
+              AppFormTextField(
+                key: const Key('field-new-password'),
+                label: 'New Password',
+                controller: _passwordController,
+                obscureText: _obscure,
+                prefixIcon: Icons.lock_outlined,
+                textInputAction: TextInputAction.next,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Password is required';
+                  }
+                  if (value.trim().length < 8) {
+                    return 'Password must be at least 8 characters';
+                  }
+                  return null;
+                },
+              ),
+              AppFormTextField(
+                key: const Key('field-confirm-password'),
+                label: 'Confirm Password',
+                controller: _confirmController,
+                obscureText: _obscure,
+                prefixIcon: Icons.lock_outline,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please confirm your password';
+                  }
+                  if (value != _passwordController.text) {
+                    return 'Passwords do not match';
+                  }
+                  return null;
+                },
               ),
               if (_error != null) ...[
                 const SizedBox(height: DagacsSpace.xs),
@@ -318,9 +341,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
               const SizedBox(height: DagacsSpace.lg),
               AppPrimaryButton(
-                onPressed: _handleLogin,
+                onPressed: _submit,
                 loading: _isLoading,
-                child: const Text('Sign In'),
+                child: const Text('Update Password'),
               ),
             ],
           ),

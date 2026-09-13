@@ -78,6 +78,64 @@ void main() {
       expect(student.hasLogin, isTrue);
       expect(student.loginIsActive, isFalse);
     });
+
+    test('parses M10A first-login fields', () {
+      final student = StudentManagement.fromJson({
+        'id': 8,
+        'rollNumber': '2201CE006',
+        'name': 'Kiran',
+        'status': 'ACTIVE',
+        'loginLinked': true,
+        'loginStatus': 'ACTIVE',
+        'mustChangePassword': true,
+        'temporaryPassword': 'Temp#Pass1',
+        'credentialDownloadId': 'dl-abcd-1234',
+      });
+      expect(student.mustChangePassword, isTrue);
+      expect(student.temporaryPassword, 'Temp#Pass1');
+      expect(student.credentialDownloadId, 'dl-abcd-1234');
+    });
+
+    test('M10A fields default to null when absent', () {
+      final student = StudentManagement.fromJson({
+        'id': 9,
+        'rollNumber': '2201CE007',
+        'name': 'Sana',
+        'status': 'ACTIVE',
+      });
+      expect(student.mustChangePassword, isNull);
+      expect(student.temporaryPassword, isNull);
+      expect(student.credentialDownloadId, isNull);
+    });
+  });
+
+  group('StudentImportResult.fromJson', () {
+    test('parses credentialDownloadId on success', () {
+      final result = StudentImportResult.fromJson({
+        'totalRows': 2,
+        'importedRows': 2,
+        'rejectedRows': 0,
+        'message': 'Imported 2 students',
+        'credentialDownloadId': 'dl-xyz-999',
+        'errors': [],
+      });
+      expect(result.isSuccess, isTrue);
+      expect(result.credentialDownloadId, 'dl-xyz-999');
+    });
+
+    test('credentialDownloadId is null when absent or rejected', () {
+      final result = StudentImportResult.fromJson({
+        'totalRows': 2,
+        'importedRows': 0,
+        'rejectedRows': 2,
+        'message': 'Rejected',
+        'errors': [
+          {'rowNumber': 2, 'field': 'email', 'message': 'bad', 'status': 400}
+        ],
+      });
+      expect(result.isSuccess, isFalse);
+      expect(result.credentialDownloadId, isNull);
+    });
   });
 
   group('StudentLoginPasswordRequest', () {

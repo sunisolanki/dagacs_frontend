@@ -25,6 +25,9 @@ class StudentManagement {
   final String? sectionName;
   final bool? loginLinked;
   final String? loginStatus;
+  final bool? mustChangePassword;
+  final String? temporaryPassword;
+  final String? credentialDownloadId;
 
   const StudentManagement({
     this.id,
@@ -47,6 +50,9 @@ class StudentManagement {
     this.sectionName,
     this.loginLinked,
     this.loginStatus,
+    this.mustChangePassword,
+    this.temporaryPassword,
+    this.credentialDownloadId,
   });
 
   factory StudentManagement.fromJson(Map<String, dynamic> json) {
@@ -71,6 +77,9 @@ class StudentManagement {
       sectionName: json['sectionName'] as String?,
       loginLinked: json['loginLinked'] as bool?,
       loginStatus: json['loginStatus'] as String?,
+      mustChangePassword: json['mustChangePassword'] as bool?,
+      temporaryPassword: json['temporaryPassword'] as String?,
+      credentialDownloadId: json['credentialDownloadId'] as String?,
     );
   }
 
@@ -176,6 +185,7 @@ class StudentImportResult {
   final int importedRows;
   final int rejectedRows;
   final String? message;
+  final String? credentialDownloadId;
   final List<StudentImportError> errors;
 
   const StudentImportResult({
@@ -183,6 +193,7 @@ class StudentImportResult {
     this.importedRows = 0,
     this.rejectedRows = 0,
     this.message,
+    this.credentialDownloadId,
     this.errors = const [],
   });
 
@@ -193,6 +204,7 @@ class StudentImportResult {
       importedRows: (json['importedRows'] as num?)?.toInt() ?? 0,
       rejectedRows: (json['rejectedRows'] as num?)?.toInt() ?? 0,
       message: json['message'] as String?,
+      credentialDownloadId: json['credentialDownloadId'] as String?,
       errors: rawErrors is List
           ? rawErrors
               .whereType<Map>()

@@ -175,7 +175,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         expect(find.text('Sign In'), findsOneWidget);
-        expect(find.byKey(const Key('login-email')), findsOneWidget);
+        expect(find.byKey(const Key('login-identifier')), findsOneWidget);
         expect(find.byKey(const Key('login-password')), findsOneWidget);
       });
 
