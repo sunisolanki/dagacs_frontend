@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
         mustChangePassword: auth.mustChangePassword,
       );
       if (!mounted) return;
-      if (auth.mustChangePassword) {
+      if (auth.role == 'STUDENT' && auth.mustChangePassword) {
         Navigator.pushReplacementNamed(context, AppRoutes.studentChangePassword);
       } else {
         Navigator.pushReplacementNamed(context, '/home');

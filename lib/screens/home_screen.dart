@@ -21,7 +21,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (session.mustChangePassword) {
+    if (session.role == 'STUDENT' && session.mustChangePassword) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.pushReplacementNamed(context, AppRoutes.studentChangePassword);
       });

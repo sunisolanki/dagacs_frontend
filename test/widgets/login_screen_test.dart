@@ -45,6 +45,10 @@ Widget _buildApp(AuthRepository repo, SessionController session) {
         case '/home':
           return MaterialPageRoute(
               builder: (_) => const Scaffold(body: Text('HOME-ROUTE')));
+        case '/student/change-password':
+          return MaterialPageRoute(
+              builder: (_) =>
+                  const Scaffold(body: Text('CHANGE-PASSWORD-ROUTE')));
         default:
           return MaterialPageRoute(builder: (_) => const SizedBox());
       }
@@ -415,5 +419,76 @@ void main() {  testWidgets('shows validation errors for empty fields', (tester) 
     expect(session.isAuthenticated, isTrue);
     expect(session.role, 'ADMIN');
     expect(find.text('HOME-ROUTE'), findsOneWidget);
+  });
+
+  testWidgets('student with mustChangePassword routes to change-password',
+      (tester) async {
+    final repo = _FakeAuthRepository((e, p) => const AuthResponse(
+        token: 'jwt',
+        email: 's@dagacs.local',
+        fullName: 'Student',
+        role: 'STUDENT',
+        mustChangePassword: true));
+    final session = SessionController(repo);
+    await tester.pumpWidget(_buildApp(repo, session));
+
+    await tester.enterText(find.byType(TextFormField).at(0), 's@dagacs.local');
+    await tester.enterText(find.byType(TextFormField).at(1), 'TempPass#1');
+    await tester.tap(find.text('Sign In'));
+    await tester.pumpAndSettle();
+
+    expect(session.isAuthenticated, isTrue);
+    expect(session.mustChangePassword, isTrue);
+    expect(find.text('CHANGE-PASSWORD-ROUTE'), findsOneWidget);
+    expect(find.text('HOME-ROUTE'), findsNothing,
+        reason: 'M10A: a STUDENT with the flag must enter the change flow');
+  });
+
+  for (final role in ['HOD', 'TEACHER', 'ADMIN']) {
+    testWidgets(
+        '$role with a stale mustChangePassword flag is NOT routed to '
+        'change-password and lands on home', (tester) async {
+      final repo = _FakeAuthRepository((e, p) => AuthResponse(
+          token: 'jwt',
+          email: '${role.toLowerCase()}@dagacs.local',
+          fullName: role,
+          role: role,
+          mustChangePassword: true));
+      final session = SessionController(repo);
+      await tester.pumpWidget(_buildApp(repo, session));
+
+      await tester.enterText(find.byType(TextFormField).at(0), 'x@dagacs.local');
+      await tester.enterText(find.byType(TextFormField).at(1), 'Stale#1234');
+      await tester.tap(find.text('Sign In'));
+      await tester.pumpAndSettle();
+
+      expect(session.isAuthenticated, isTrue);
+      expect(session.role, role);
+      expect(find.text('HOME-ROUTE'), findsOneWidget,
+          reason: 'M10A: a $role with a stale flag must reach the app home');
+      expect(find.text('CHANGE-PASSWORD-ROUTE'), findsNothing,
+          reason: 'M10A: the Student change-password flow is STUDENT-only');
+    });
+  }
+
+  testWidgets('student normal login with flag false stays on home',
+      (tester) async {
+    final repo = _FakeAuthRepository((e, p) => const AuthResponse(
+        token: 'jwt',
+        email: 's@dagacs.local',
+        fullName: 'Student',
+        role: 'STUDENT'));
+    final session = SessionController(repo);
+    await tester.pumpWidget(_buildApp(repo, session));
+
+    await tester.enterText(find.byType(TextFormField).at(0), 's@dagacs.local');
+    await tester.enterText(find.byType(TextFormField).at(1), 'Passw0rd!');
+    await tester.tap(find.text('Sign In'));
+    await tester.pumpAndSettle();
+
+    expect(session.isAuthenticated, isTrue);
+    expect(find.text('HOME-ROUTE'), findsOneWidget,
+        reason: 'M10A: a student without the flag uses the normal home flow');
+    expect(find.text('CHANGE-PASSWORD-ROUTE'), findsNothing);
   });
 }
