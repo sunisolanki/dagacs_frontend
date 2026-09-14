@@ -1,7 +1,7 @@
 /// Matches backend `TeacherAssignmentDTO` (M9.3).
 ///
-/// Carries the three relational identities (teacherId / subjectOfferingId /
-/// sectionId) plus the fully derived display context. All academic context
+/// Carries the request identities (teacherId / subjectOfferingId / sectionId |
+/// batchId) plus the fully derived display context. All academic context
 /// (Subject, Semester, AcademicSession, Program, Department, Batch) is computed
 /// server-side — the client never sends context ids.
 class TeacherAssignment {
@@ -85,24 +85,27 @@ class TeacherAssignment {
 
 /// Mutable fields sent for POST/PUT `/api/admin/teacher-assignments`.
 ///
-/// Exactly three identities exist in the request contract: `teacherId`,
-/// `subjectOfferingId` and `sectionId` — nothing more. Context ids (subjectId /
-/// semesterId / academicSessionId / programId / departmentId / batchId /
-/// studentId) are deliberately absent and always derived server-side.
+/// The request contract carries {teacherId, subjectOfferingId} plus exactly one
+/// of {sectionId | batchId} (XOR). Context ids (subjectId / semesterId /
+/// academicSessionId / programId / departmentId / studentId) are deliberately
+/// absent and always derived server-side.
 class TeacherAssignmentRequest {
   const TeacherAssignmentRequest({
     required this.teacherId,
     required this.subjectOfferingId,
-    required this.sectionId,
+    this.sectionId,
+    this.batchId,
   });
 
   final int teacherId;
   final int subjectOfferingId;
-  final int sectionId;
+  final int? sectionId;
+  final int? batchId;
 
   Map<String, dynamic> toJson() => {
         'teacherId': teacherId,
         'subjectOfferingId': subjectOfferingId,
-        'sectionId': sectionId,
+        if (sectionId != null) 'sectionId': sectionId,
+        if (batchId != null) 'batchId': batchId,
       };
 }

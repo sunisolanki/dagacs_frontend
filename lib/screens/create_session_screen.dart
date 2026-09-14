@@ -124,10 +124,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     if (assignment == null) return;
     final subjectId = assignment.subjectId;
     final sectionId = assignment.sectionId;
-    if (subjectId == null || sectionId == null) {
+    final batchId = assignment.batchId;
+    if (subjectId == null || (sectionId == null && batchId == null)) {
       setState(() {
         _error =
-            'Selected class is missing subject or section information.';
+            'Selected class is missing subject, section or batch information.';
       });
       return;
     }
@@ -141,6 +142,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         AttendanceSessionCreateRequest(
           subjectId: subjectId,
           sectionId: sectionId,
+          batchId: sectionId == null ? batchId : null,
           lecturePeriod: _lecturePeriodController.text.trim(),
           date: _dateController.text.trim(),
         ),
@@ -149,7 +151,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       Navigator.pop(context, created);
     } on ApiException catch (e) {
       if (e.statusCode == 409) {
-        await _resolveDuplicate(subjectId, sectionId);
+        await _resolveDuplicate(subjectId, sectionId, batchId);
         return;
       }
       if (!mounted) return;
@@ -174,7 +176,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
   /// Backend uniqueness rule is untouched; on 409 the existing session is
   /// found locally from the teacher's own session list and offered to open.
-  Future<void> _resolveDuplicate(int subjectId, int sectionId) async {
+  Future<void> _resolveDuplicate(
+      int subjectId, int? sectionId, int? batchId) async {
     setState(() {
       _resolvingDuplicate = true;
       _error = null;
@@ -184,7 +187,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       AttendanceSession? existing;
       for (final session in sessions) {
         if (session.subjectId == subjectId &&
-            session.sectionId == sectionId &&
+            (sectionId != null
+                ? session.sectionId == sectionId
+                : session.batchId == batchId) &&
             session.date == _dateController.text.trim() &&
             session.lecturePeriod == _lecturePeriodController.text.trim()) {
           existing = session;

@@ -1,4 +1,5 @@
 import 'package:dagacs_frontend/models/academic_session.dart';
+import 'package:dagacs_frontend/models/batch.dart';
 import 'package:dagacs_frontend/models/department.dart';
 import 'package:dagacs_frontend/models/program.dart';
 import 'package:dagacs_frontend/models/section.dart';
@@ -14,13 +15,31 @@ import 'package:dagacs_frontend/screens/master_data/assignment_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const _batch1 = Batch(
+    id: 11, batchCode: 'B1', name: 'Batch 1', academicSessionId: 1);
+const _batch2 = Batch(
+    id: 12, batchCode: 'B2', name: 'Batch 2', academicSessionId: 1);
+const _batchEmpty = Batch(
+    id: 13, batchCode: 'B3', name: 'Batch 3 (empty)', academicSessionId: 1);
+
+const _sectionA = Section(
+    id: 9,
+    name: 'Section A',
+    sectionCode: 'A',
+    batchId: 11,
+    batch: _batch1);
+const _sectionB = Section(
+    id: 10,
+    name: 'Section B',
+    sectionCode: 'B',
+    batchId: 12,
+    batch: _batch2);
+
 class _CapturingRepo extends MasterDataRepository {
   _CapturingRepo() : super(ApiClient());
 
   TeacherAssignmentRequest? assignmentReq;
   int? assignmentUpdateId;
-  int? reenterAfterSubmit;
-
   Object? failError;
 
   @override
@@ -54,17 +73,20 @@ class _CapturingRepo extends MasterDataRepository {
             name: 'Semester 3',
             code: 'SEM3',
             academicSessionId: 1,
-            academicSession: AcademicSession(id: 1, name: '2026-27', code: 'S1'),
+            academicSession:
+                AcademicSession(id: 1, name: '2026-27', code: 'S1'),
           ),
         ),
+        // Offering 6 has no nested semester (no academicSessionId)
         SubjectOffering(id: 6, subjectId: 2, semesterId: 4),
       ];
 
   @override
-  Future<List<Section>> getSections() async => const [
-        Section(id: 9, name: 'Section A', sectionCode: 'A'),
-        Section(id: 10, name: 'Section B', sectionCode: 'B'),
-      ];
+  Future<List<Batch>> getBatches() async =>
+      const [_batch1, _batch2, _batchEmpty];
+
+  @override
+  Future<List<Section>> getSections() async => const [_sectionA, _sectionB];
 
   @override
   Future<List<AcademicSession>> getAcademicSessions() async => const [
@@ -77,7 +99,8 @@ class _CapturingRepo extends MasterDataRepository {
             id: 8,
             name: 'B.Tech CSE',
             code: 'CS',
-            department: Department(id: 2, name: 'Computer Science', code: 'CS'),
+            department:
+                Department(id: 2, name: 'Computer Science', code: 'CS'),
           ),
         ),
       ];
@@ -88,7 +111,8 @@ class _CapturingRepo extends MasterDataRepository {
           id: 8,
           name: 'B.Tech CSE',
           code: 'CS',
-          department: Department(id: 2, name: 'Computer Science', code: 'CS'),
+          department:
+              Department(id: 2, name: 'Computer Science', code: 'CS'),
         ),
       ];
 
@@ -134,6 +158,17 @@ Future<void> _open(
   await tester.pumpAndSettle();
 }
 
+Future<void> _selectOption(
+  WidgetTester tester,
+  String dropdownKey,
+  String optionLabel,
+) async {
+  await tester.tap(find.byKey(Key(dropdownKey)));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(optionLabel).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _submit(WidgetTester tester) async {
   final finder = find.byKey(const Key('submit-teacher-assignment'));
   await tester.ensureVisible(finder);
@@ -143,14 +178,22 @@ Future<void> _submit(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('assignment form sends exactly the three identity ids',
-      (tester) async {
+  testWidgets('assignment form shows batch selector and sends exactly the '
+      'three identity ids', (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo);
 
     expect(find.byKey(const Key('field-teacher')), findsOneWidget);
     expect(find.byKey(const Key('field-subject-offering')), findsOneWidget);
+    expect(find.byKey(const Key('field-batch')), findsOneWidget);
+    // Section selector is present (batch B1 has sections) but not auto-selected
     expect(find.byKey(const Key('field-section')), findsOneWidget);
+
+    // Default batch is B1 (first session-matched batch)
+    expect(find.text('Batch B1 — Batch 1'), findsOneWidget);
+
+    // Select a section from B1
+    await _selectOption(tester, 'field-section', 'A — Section A · Batch B1');
 
     expect(find.text('Dr A Sharma — Professor'), findsOneWidget);
     expect(
@@ -183,6 +226,8 @@ void main() {
 
     expect(find.text('Edit Teacher Assignment'), findsOneWidget);
     expect(find.text('Dr B Gupta — Associate'), findsOneWidget);
+    // Section is pre-filled from the initial
+    expect(find.byKey(const Key('field-section')), findsOneWidget);
 
     await _submit(tester);
 
@@ -229,22 +274,100 @@ void main() {
         {'teacherId', 'subjectOfferingId', 'sectionId'});
   });
 
-  testWidgets('assignment form create defaults to the first active teacher',
-      (tester) async {
+  testWidgets('assignment form create defaults to the first active teacher '
+      'and requires an explicit section selection', (tester) async {
     final repo = _CapturingRepo();
     await _open(tester, repo);
 
     expect(find.text('Dr A Sharma — Professor'), findsOneWidget);
+    // Submit without selecting a section — should be blocked
+    await _submit(tester);
+    expect(repo.assignmentReq, isNull);
+
+    // Now select a section and submit
+    await _selectOption(
+        tester, 'field-section', 'A — Section A · Batch B1');
     await _submit(tester);
 
     expect(repo.assignmentReq!.teacherId, 1);
+    expect(repo.assignmentReq!.sectionId, 9);
+  });
+
+  testWidgets('assignment form filters sections by the selected batch',
+      (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo);
+
+    // Default batch B1 — only Section A present
+    await tester.tap(find.byKey(const Key('field-section')));
+    await tester.pumpAndSettle();
+    expect(find.text('A — Section A · Batch B1'), findsOneWidget);
+    expect(find.text('B — Section B · Batch B2'), findsNothing);
+    await tester.tap(find.text('A — Section A · Batch B1'));
+    await tester.pumpAndSettle();
+
+    // Switch to batch B2 — only Section B now present
+    await _selectOption(tester, 'field-batch', 'Batch B2 — Batch 2');
+    expect(find.text('A — Section A · Batch B1'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('field-section')));
+    await tester.pumpAndSettle();
+    expect(find.text('B — Section B · Batch B2'), findsOneWidget);
+    expect(find.text('A — Section A · Batch B1'), findsNothing);
+  });
+
+  testWidgets('assignment form switching offering resets batch and section',
+      (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo);
+
+    // Select a section in offering 5 → batch B1
+    await _selectOption(
+        tester, 'field-section', 'A — Section A · Batch B1');
+    expect(find.byKey(const Key('field-section')), findsOneWidget);
+
+    // Switch to offering 6 (no nested academicSession) → batch cleared,
+    // section selector hidden
+    await tester.tap(find.byKey(const Key('field-subject-offering')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+        find.text('Subject unavailable · Semester unavailable').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('field-section')), findsNothing);
+  });
+
+  testWidgets('assignment form zero-section batch submits a batch-level '
+        'assignment', (tester) async {
+    final repo = _CapturingRepo();
+    await _open(tester, repo);
+
+    await _selectOption(tester, 'field-batch', 'Batch B3 — Batch 3 (empty)');
+
+    expect(
+      find.text(
+          'No sections exist in this batch. The assignment will be '
+          'created at the batch level.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('field-section')), findsNothing);
+
+    await _submit(tester);
+
+    expect(repo.assignmentReq, isNotNull);
+    expect(repo.assignmentReq!.teacherId, 1);
+    expect(repo.assignmentReq!.subjectOfferingId, 5);
+    expect(repo.assignmentReq!.sectionId, isNull);
+    expect(repo.assignmentReq!.batchId, 13);
+    expect(repo.assignmentReq!.toJson(),
+        {'teacherId': 1, 'subjectOfferingId': 5, 'batchId': 13});
   });
 
   testWidgets('assignment form edit renders the backend 409 message as the '
       'submit error', (tester) async {
     final repo = _CapturingRepo()
-      ..failError = const ApiException(
-          409, 'Cannot change assignment teacher while attendance history exists.');
+      ..failError = const ApiException(409,
+          'Cannot change assignment teacher while attendance history exists.');
     await _open(
       tester,
       repo,
@@ -254,8 +377,9 @@ void main() {
 
     await _submit(tester);
 
-    expect(find.text(
-        'Cannot change assignment teacher while attendance history exists.'),
+    expect(
+        find.text(
+            'Cannot change assignment teacher while attendance history exists.'),
         findsOneWidget);
   });
 }

@@ -1098,18 +1098,36 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
             }),
             validator: (v) => v == null ? 'Batch is required' : null,
           ),
-          AppFormDropdown<int>(
-            key: const Key('field-section'),
-            label: 'Section',
-            value: _sectionId,
-            items: _sectionsForBatch(_batchId)
-                .where((s) => s.id != null)
-                .map((s) => DropdownMenuItem(
-                    value: s.id, child: Text(s.name ?? 'Unknown')))
-                .toList(),
-            onChanged: (v) => setState(() => _sectionId = v),
-            validator: (v) => v == null ? 'Section is required' : null,
-          ),
+          if (_sectionsForBatch(_batchId).isNotEmpty)
+            AppFormDropdown<int>(
+              key: const Key('field-section'),
+              label: 'Section',
+              value: _sectionId,
+              items: _sectionsForBatch(_batchId)
+                  .where((s) => s.id != null)
+                  .map((s) => DropdownMenuItem(
+                      value: s.id, child: Text(s.name ?? 'Unknown')))
+                  .toList(),
+              onChanged: (v) => setState(() => _sectionId = v),
+              validator: (v) => v == null ? 'Section is required' : null,
+            )
+          else if (_batchId != null)
+            Container(
+              key: const Key('no-sections-note'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: DagacsColors.infoBg,
+                borderRadius:
+                    const BorderRadius.all(Radius.circular(DagacsRadius.md)),
+              ),
+              child: const Text(
+                'This batch has no sections. The student is added without a '
+                'section.',
+                style: TextStyle(fontSize: 13, color: DagacsColors.info),
+              ),
+            ),
           AppFormDropdown<String>(
             key: const Key('field-status'),
             label: 'Status',
@@ -1249,7 +1267,8 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
           'Upload an Excel (.xlsx) or CSV (.csv) file with the columns: '
           'Roll Number, Email, Name, Gender, Father Name, Mother Name, '
           'Photo URL, Enrollment Number, Age, Admission Date, Status, '
-          'Program ID, Batch ID, Section ID. Import is all-or-nothing: if '
+          'Program ID, Batch ID, Section ID (leave Section ID blank for a '
+          'batch that has no sections). Import is all-or-nothing: if '
           'any row is invalid, no students are added.',
           style: Theme.of(context).textTheme.bodySmall,
         ),

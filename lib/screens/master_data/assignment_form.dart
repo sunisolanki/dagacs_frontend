@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academic_session.dart';
+import '../../models/batch.dart';
 import '../../models/program.dart';
 import '../../models/section.dart';
 import '../../models/subject_offering.dart';
@@ -47,6 +48,7 @@ class _TeacherAssignmentFormDialogState
 
   int? _teacherId;
   int? _subjectOfferingId;
+  int? _batchId;
   int? _sectionId;
 
   bool _loadingReferences = true;
@@ -56,11 +58,74 @@ class _TeacherAssignmentFormDialogState
 
   List<Teacher> _teachers = const [];
   List<SubjectOffering> _offerings = const [];
+  List<Batch> _batches = const [];
   List<Section> _sections = const [];
   Map<int, AcademicSession> _sessionsById = const {};
   Map<int, Program> _programsById = const {};
 
   bool get _isEdit => widget.initial != null;
+
+  SubjectOffering? get _selectedOffering {
+    final id = _subjectOfferingId;
+    if (id == null) return null;
+    for (final o in _offerings) {
+      if (o.id == id) return o;
+    }
+    return null;
+  }
+
+  int? get _offeringSessionId =>
+      _selectedOffering?.semester?.academicSessionId;
+
+  int? get _initialBatchId {
+    final sectionId = widget.initial?.sectionId;
+    if (sectionId != null) {
+      for (final s in _sections) {
+        if (s.id == sectionId) return s.batchId;
+      }
+    }
+    return widget.initial?.batchId;
+  }
+
+  List<Batch> get _selectableBatches {
+    final sessionId = _offeringSessionId;
+    final initialBatchId = widget.initial?.batchId;
+    return [
+      for (final b in _batches)
+        if (b.id != null &&
+            ((sessionId != null && b.academicSessionId == sessionId) ||
+                (widget.initial?.sectionId != null &&
+                    b.id == _initialBatchId) ||
+                (initialBatchId != null && b.id == initialBatchId)))
+          b,
+    ];
+  }
+
+  List<Section> get _sectionsForBatch {
+    final batchId = _batchId;
+    if (batchId == null) return const [];
+    return [
+      for (final s in _sections)
+        if (s.id != null && s.batchId == batchId) s,
+    ];
+  }
+
+  int? _resolveInitialBatchId() {
+    final preferred = _initialBatchId;
+    if (preferred != null) return preferred;
+    return _selectableBatches.firstOrNull?.id;
+  }
+
+  int? _resolveInitialSectionId() {
+    final preferred = widget.initial?.sectionId;
+    if (preferred == null) return null;
+    final batchId = _batchId;
+    if (batchId == null) return null;
+    for (final s in _sectionsForBatch) {
+      if (s.id == preferred) return preferred;
+    }
+    return null;
+  }
 
   List<Teacher> get _selectableTeachers {
     final currentTeacherId = widget.initial?.teacherId;
@@ -90,6 +155,7 @@ class _TeacherAssignmentFormDialogState
       final results = await Future.wait([
         widget.repository.getTeachers(),
         widget.repository.getSubjectOfferings(),
+        widget.repository.getBatches(),
         widget.repository.getSections(),
         widget.repository.getAcademicSessions(),
         widget.repository.getPrograms(),
@@ -97,12 +163,14 @@ class _TeacherAssignmentFormDialogState
       if (!mounted) return;
       final teachers = results[0] as List<Teacher>;
       final offerings = results[1] as List<SubjectOffering>;
-      final sections = results[2] as List<Section>;
-      final sessions = results[3] as List<AcademicSession>;
-      final programs = results[4] as List<Program>;
+      final batches = results[2] as List<Batch>;
+      final sections = results[3] as List<Section>;
+      final sessions = results[4] as List<AcademicSession>;
+      final programs = results[5] as List<Program>;
       setState(() {
         _teachers = teachers;
         _offerings = offerings;
+        _batches = batches;
         _sections = sections;
         _sessionsById = {
           for (final session in sessions)
@@ -116,7 +184,8 @@ class _TeacherAssignmentFormDialogState
             widget.initial?.teacherId ?? _selectableTeachers.firstOrNull?.id;
         _subjectOfferingId =
             widget.initial?.subjectOfferingId ?? _offerings.firstOrNull?.id;
-        _sectionId = widget.initial?.sectionId ?? _sections.firstOrNull?.id;
+        _batchId = _resolveInitialBatchId();
+        _sectionId = _resolveInitialSectionId();
         _loadingReferences = false;
       });
     } on ApiException {
@@ -179,13 +248,50 @@ class _TeacherAssignmentFormDialogState
     return '$section · $batch';
   }
 
+  String _batchLabel(Batch b) {
+    final code = b.batchCode?.trim();
+    final name = b.name?.trim();
+    if (code == null || code.isEmpty) {
+      return (name == null || name.isEmpty) ? 'Batch unavailable' : name;
+    }
+    if (name == null || name.isEmpty) return 'Batch $code';
+    return 'Batch $code — $name';
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final batchId = _batchId;
+    if (batchId == null) {
+      setState(() {
+        _submitError = 'Batch is required.';
+      });
+      return;
+    }
+    if (_sectionsForBatch.isEmpty) {
+      // Phase 2: a batch with no sections gets a batch-level assignment.
+      final request = TeacherAssignmentRequest(
+        teacherId: _teacherId!,
+        subjectOfferingId: _subjectOfferingId!,
+        batchId: batchId,
+      );
+      await _save(request);
+      return;
+    }
+    if (_sectionId == null) {
+      setState(() {
+        _submitError = 'Please select a section for this batch.';
+      });
+      return;
+    }
     final request = TeacherAssignmentRequest(
       teacherId: _teacherId!,
       subjectOfferingId: _subjectOfferingId!,
       sectionId: _sectionId!,
     );
+    await _save(request);
+  }
+
+  Future<void> _save(TeacherAssignmentRequest request) async {
     setState(() {
       _submitting = true;
       _submitError = null;
@@ -277,29 +383,64 @@ class _TeacherAssignmentFormDialogState
                       ),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _subjectOfferingId = v),
+            onChanged: (v) => setState(() {
+              _subjectOfferingId = v;
+              _batchId = _selectableBatches.firstOrNull?.id;
+              _sectionId = null;
+            }),
             validator: (v) =>
                 v == null ? 'Subject offering is required' : null,
           ),
           AppFormDropdown<int>(
-            key: const Key('field-section'),
-            label: 'Section',
-            value: _sectionId,
-            items: _sections
-                .where((s) => s.id != null)
-                .map((s) => DropdownMenuItem(
-                      value: s.id,
+            key: const Key('field-batch'),
+            label: 'Batch',
+            value: _batchId,
+            items: _selectableBatches
+                .map((b) => DropdownMenuItem(
+                      value: b.id,
                       child: Text(
-                        _sectionLabel(s),
+                        _batchLabel(b),
                         maxLines: 2,
                         softWrap: true,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _sectionId = v),
-            validator: (v) => v == null ? 'Section is required' : null,
+            onChanged: (v) => setState(() {
+              _batchId = v;
+              _sectionId = null;
+            }),
+            validator: (v) => v == null ? 'Batch is required' : null,
           ),
+          if (_batchId != null && _sectionsForBatch.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'No sections exist in this batch. The assignment will be '
+                'created at the batch level.',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            )
+          else if (_batchId != null)
+            AppFormDropdown<int>(
+              key: const Key('field-section'),
+              label: 'Section',
+              value: _sectionId,
+              items: _sectionsForBatch
+                  .map((s) => DropdownMenuItem(
+                        value: s.id,
+                        child: Text(
+                          _sectionLabel(s),
+                          maxLines: 2,
+                          softWrap: true,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _sectionId = v),
+              validator: (v) => v == null ? 'Section is required' : null,
+            ),
           if (_submitError != null) ...[
             const SizedBox(height: 12),
             Text(

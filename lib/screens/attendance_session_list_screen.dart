@@ -139,7 +139,8 @@ class _AttendanceSessionListScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${s.subjectName ?? "Subject ${s.subjectId ?? "-"}"} · ${s.sectionName ?? "Section ${s.sectionId ?? "-"}"}',
+                          '${s.subjectName ?? "Subject ${s.subjectId ?? "-"}"} · '
+                          '${s.sectionName != null && s.sectionName!.isNotEmpty ? s.sectionName : (s.batchName != null && s.batchName!.isNotEmpty ? s.batchName : "Section ${s.sectionId ?? "-"}")}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleSmall,
