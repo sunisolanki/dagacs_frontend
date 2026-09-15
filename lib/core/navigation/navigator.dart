@@ -15,6 +15,7 @@ class AppRoutes {
   static const String hodDashboard = '/hod/dashboard';
   static const String hodReports = '/hod/reports';
   static const String teacherReports = '/teacher/reports';
+  static const String teacherStudentWise = '/teacher/student-wise';
   static const String teacherClasses = '/teacher/classes';
   static const String masterData = '/master-data';
   static const String masterDataDepartments = '/master-data/departments';

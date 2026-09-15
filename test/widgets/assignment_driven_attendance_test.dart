@@ -106,13 +106,17 @@ void main() {
           findsOneWidget);
     });
 
-    testWidgets('tile appears for TEACHER only', (tester) async {
-      for (final role in ['ADMIN', 'HOD', 'STUDENT']) {
+    testWidgets('tile appears for TEACHER and HOD only', (tester) async {
+      for (final role in ['ADMIN', 'STUDENT']) {
         await tester.pumpWidget(_home(role));
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('teacher-my-classes-tile')), findsNothing,
             reason: '$role must not receive the teacher My Classes tile');
       }
+      await tester.pumpWidget(_home('HOD'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('hod-my-classes-tile')), findsOneWidget);
+      expect(find.text('My Classes'), findsOneWidget);
       await tester.pumpWidget(_home('TEACHER'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('teacher-my-classes-tile')), findsOneWidget);

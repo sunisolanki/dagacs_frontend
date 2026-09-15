@@ -30,7 +30,8 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   String? lastStatus;
 
   int? lastProvisionId;
-  String? lastProvisionPassword;
+  StudentManagement? provisionResult;
+  ApiException? provisionError;
   int? lastLoginStatusId;
   String? lastLoginStatus;
   int? lastPasswordId;
@@ -77,12 +78,16 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   }
 
   @override
-  Future<StudentManagement> provisionLogin(
-      int id, StudentLoginPasswordRequest request) async {
+  Future<StudentManagement> provisionLogin(int id) async {
     lastProvisionId = id;
-    lastProvisionPassword = request.password;
-    return const StudentManagement(
-        id: 1, loginLinked: true, loginStatus: 'ACTIVE');
+    if (provisionError != null) throw provisionError!;
+    return provisionResult ??
+        const StudentManagement(
+            id: 1,
+            loginLinked: true,
+            loginStatus: 'ACTIVE',
+            mustChangePassword: true,
+            temporaryPassword: 'TempPass#2026');
   }
 
   @override
@@ -627,7 +632,8 @@ void main() {
   });
 
   testWidgets(
-      'detail of an unlinked student offers Create Login which provisions',
+      'detail of an unlinked student Create Login confirms, provisions '
+      'without a password and shows the temporary credentials',
       (tester) async {
     _bigViewport(tester);
     final repo = _FakeStudentManagementRepository()
@@ -641,18 +647,54 @@ void main() {
     expect(find.text('No'), findsOneWidget);
     expect(find.byKey(const Key('detail-create-login')), findsOneWidget);
     expect(find.byKey(const Key('detail-reset-password')), findsNothing);
+    expect(find.byKey(const Key('field-login-password')), findsNothing);
 
     await tester.tap(find.byKey(const Key('detail-create-login')));
     await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byKey(const Key('field-login-password')), 'StuPass#1');
-    await tester.enterText(
-        find.byKey(const Key('field-login-confirm')), 'StuPass#1');
-    await tester.tap(find.byKey(const Key('submit-login-password')));
+    expect(find.text('Create Login for Rahul Kumar'), findsOneWidget);
+    // The admin must NOT be asked for a New Password / Confirm Password.
+    expect(find.byKey(const Key('field-login-password')), findsNothing);
+    expect(find.byKey(const Key('field-login-confirm')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('confirm-create-login')));
     await tester.pumpAndSettle();
 
     expect(repo.lastProvisionId, 1);
-    expect(repo.lastProvisionPassword, 'StuPass#1');
+    // Temporary credentials are shown exactly once.
+    expect(find.text('Login Created'), findsOneWidget);
+    expect(find.text('Temporary Password'), findsOneWidget);
+    expect(find.text('TempPass#2026'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('temporary-credentials-done')));
+    await tester.pumpAndSettle();
+    expect(find.text('Login Created'), findsNothing);
+    // The student list was refreshed after provisioning.
+    expect(repo.getStudentsCalls, greaterThanOrEqualTo(2));
+  });
+
+  testWidgets(
+      'Create Login surfaces the backend NULL-email 400 message verbatim',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..provisionError = const ApiException(
+          400, 'The student has no email to link a login to');
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('student-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('detail-create-login')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-create-login')));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.textContaining('The student has no email to link a login to'),
+        findsOneWidget);
+    expect(repo.lastProvisionId, 1);
+    expect(find.text('Login Created'), findsNothing);
   });
 
   testWidgets(
@@ -696,17 +738,23 @@ void main() {
     expect(repo.lastLoginStatus, 'INACTIVE');
   });
 
-  testWidgets('password dialog enforces minimum length and matching confirm',
+  testWidgets('Reset Password dialog enforces minimum length and matching confirm',
       (tester) async {
     _bigViewport(tester);
-    final repo = _FakeStudentManagementRepository()
-      ..students = const [_active];
+    const linked = StudentManagement(
+        id: 1,
+        rollNumber: '2201CE001',
+        name: 'Rahul Kumar',
+        status: 'ACTIVE',
+        loginLinked: true,
+        loginStatus: 'ACTIVE');
+    final repo = _FakeStudentManagementRepository()..students = const [linked];
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('student-tile-1')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('detail-create-login')));
+    await tester.tap(find.byKey(const Key('detail-reset-password')));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -716,7 +764,7 @@ void main() {
     await tester.tap(find.byKey(const Key('submit-login-password')));
     await tester.pumpAndSettle();
     expect(find.text('Password must be at least 8 characters'), findsOneWidget);
-    expect(repo.lastProvisionId, isNull);
+    expect(repo.lastPasswordId, isNull);
 
     await tester.enterText(
         find.byKey(const Key('field-login-password')), 'LongEnough#1');
@@ -725,7 +773,7 @@ void main() {
     await tester.tap(find.byKey(const Key('submit-login-password')));
     await tester.pumpAndSettle();
     expect(find.text('Passwords do not match'), findsOneWidget);
-    expect(repo.lastProvisionId, isNull);
+    expect(repo.lastPasswordId, isNull);
   });
 
   testWidgets('import dialog requires a picked file before submitting',

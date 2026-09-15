@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:dagacs_frontend/core/navigation/navigator.dart';
 import 'package:dagacs_frontend/models/report_export.dart';
+import 'package:dagacs_frontend/models/teacher_assignment.dart';
 import 'package:dagacs_frontend/models/teacher_report_row.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/report_repository.dart';
+import 'package:dagacs_frontend/repositories/teacher_repository.dart';
 import 'package:dagacs_frontend/screens/teacher_reports_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dagacs_frontend/screens/student_wise_report_screen.dart';
 
 class _FakeReportRepository extends ReportRepository {
   _FakeReportRepository();
@@ -177,6 +181,47 @@ void main() {
     expect(find.text('You are not authorized to perform this action.'),
         findsOneWidget);
   });
+
+  testWidgets('student-wise register action opens the matrix screen when a '
+      'teacher repository is provided', (tester) async {
+    final repo = _FakeReportRepository()..rows = _rows;
+    final teachers = _FakeTeacherRepository();
+    await tester.pumpWidget(MaterialApp(
+      onGenerateRoute: (settings) {
+        if (settings.name == AppRoutes.teacherStudentWise) {
+          return MaterialPageRoute(
+              builder: (_) => StudentWiseReportScreen(
+                  reportRepository: repo, teacherRepository: teachers));
+        }
+        return MaterialPageRoute(
+            builder: (_) => const SizedBox.shrink());
+      },
+      home: TeacherReportsScreen(
+          reportRepository: repo, teacherRepository: teachers),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('student-wise-register')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('student-wise-register')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Student-Wise Register'), findsOneWidget);
+    expect(find.byType(StudentWiseReportScreen), findsOneWidget);
+  });
+
+  testWidgets('reports-only surface has no student-wise action when no '
+      'teacher repository is provided', (tester) async {
+    final repo = _FakeReportRepository()..rows = _rows;
+    await tester.pumpWidget(_wrap(repo, download: (_, _, _) async => 'ok'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('student-wise-register')), findsNothing);
+  });
+}
+
+class _FakeTeacherRepository extends TeacherRepository {
+  @override
+  Future<List<TeacherAssignment>> getMyAssignments() async => const [];
 }
 
 class _ThrowingReportRepository extends _FakeReportRepository {

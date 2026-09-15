@@ -83,10 +83,12 @@ void main() {
         'id': 10,
         'rollNumber': 'CS-A-001',
         'name': 'Alice Smith',
+        'enrollmentNumber': 'ENG-2026-0001',
       });
       expect(s.id, 10);
       expect(s.rollNumber, 'CS-A-001');
       expect(s.name, 'Alice Smith');
+      expect(s.enrollmentNumber, 'ENG-2026-0001');
     });
 
     test('handles missing fields', () {
@@ -94,6 +96,7 @@ void main() {
       expect(s.id, isNull);
       expect(s.rollNumber, isNull);
       expect(s.name, isNull);
+      expect(s.enrollmentNumber, isNull);
     });
   });
 

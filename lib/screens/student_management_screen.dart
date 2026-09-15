@@ -211,20 +211,24 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 
   Future<void> _createLogin(StudentManagement student) async {
-    final password = await _promptPassword(
+    final confirmed = await showDialog<bool>(
       context: context,
-      title: 'Create Login for ${student.name ?? 'Student'}',
-      submitLabel: 'Create Login',
+      builder: (dialogContext) => _CreateLoginConfirmDialog(
+        studentName: student.name ?? 'Student',
+      ),
     );
-    if (password == null || !mounted) return;
+    if (confirmed != true || !mounted) return;
     try {
-      await widget.repository
-          .provisionLogin(student.id!, StudentLoginPasswordRequest(password));
+      final result = await widget.repository.provisionLogin(student.id!);
       if (!mounted) return;
       await _load();
+      await showDialog<void>(
+        context: context,
+        builder: (_) => _TemporaryCredentialsDialog(student: result),
+      );
     } on ApiException catch (e) {
       await _showError(
-          'Could not create the login. ${_reasonFor(e)} Please try again.');
+          'Could not create the login. ${_reasonForCreateLogin(e)} Please try again.');
     }
   }
 
@@ -289,6 +293,24 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
     switch (e.statusCode) {
       case 400:
         return 'The password must be at least 8 characters.';
+      case 404:
+        return 'This student no longer exists.';
+      case 409:
+        return 'A teacher or student with that email already has a login.';
+      default:
+        return e.message;
+    }
+  }
+
+  /// Error wording for the Create Login path. The admin no longer types a
+  /// password, so a backend 400 reflects a missing Student email - the
+  /// backend's own meaningful message is surfaced verbatim.
+  String _reasonForCreateLogin(ApiException e) {
+    switch (e.statusCode) {
+      case 400:
+        return e.message.isNotEmpty
+            ? e.message
+            : 'This student has no email to link a login to.';
       case 404:
         return 'This student no longer exists.';
       case 409:
@@ -505,6 +527,113 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
 }
 
 enum _StudentDetailAction { edit, toggle, createLogin, resetPassword, toggleLogin, downloadCredentials }
+
+class _CreateLoginConfirmDialog extends StatelessWidget {
+  const _CreateLoginConfirmDialog({required this.studentName});
+
+  final String studentName;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogFrame(
+      width: 440,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Create Login for $studentName',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+              'The system will generate a secure temporary password. '
+              'The student must change it on their first sign-in.'),
+          const SizedBox(height: 8),
+          Text(
+            'A valid email on the student profile is required to link the '
+            'login account.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          AppFormActions(
+            onCancel: () => Navigator.of(context).pop(false),
+            onSubmit: () => Navigator.of(context).pop(true),
+            submitting: false,
+            submitKey: 'confirm-create-login',
+            submitLabel: 'Create Login',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TemporaryCredentialsDialog extends StatelessWidget {
+  const _TemporaryCredentialsDialog({required this.student});
+
+  final StudentManagement student;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget row(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 150,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: DagacsColors.textSecondary,
+                ),
+              ),
+            ),
+            Expanded(child: Text(value)),
+          ],
+        ),
+      );
+    }
+
+    return AppDialogFrame(
+      width: 480,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Login Created',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const Divider(height: 28),
+          row('Student', student.name ?? '-'),
+          row('Roll Number', student.rollNumber ?? '-'),
+          row('Temporary Password', student.temporaryPassword ?? ''),
+          const Divider(height: 28),
+          Text(
+            'Copy and share this temporary password with the student once - '
+            'it will not be shown again. The student must change it after '
+            'signing in with their roll number.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              key: const Key('temporary-credentials-done'),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _StudentDetailDialog extends StatelessWidget {
   const _StudentDetailDialog({

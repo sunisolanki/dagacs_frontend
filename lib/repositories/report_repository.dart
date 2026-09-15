@@ -4,6 +4,7 @@ import '../models/hod_coverage_row.dart';
 import '../models/hod_daily_lecture_row.dart';
 import '../models/report_export.dart';
 import '../models/report_page.dart';
+import '../models/student_wise_report.dart';
 import '../models/teacher_report_row.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
@@ -91,13 +92,62 @@ class ReportRepository {
             '${_dateSuffix(startDate, endDate)}.$format');
   }
 
+  /// Additive student-wise attendance matrix (one class at a time).
+  ///
+  /// Locked M10B contract: [subjectId] is required and exactly one of
+  /// [sectionId] / [batchId] must select the class (XOR). Missing/both/neither
+  /// is rejected by the server with 400, a nonexistent ID with 404, and an
+  /// out-of-scope/unassigned context with 403. The matrix itself is always
+  /// self-scoped to the JWT teacher.
+  Future<StudentWiseReport> getStudentWiseReport({
+    required int subjectId,
+    int? sectionId,
+    int? batchId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final path = _query('/teacher/attendance/student-wise',
+            startDate: startDate, endDate: endDate,
+            extra: {
+              'subjectId': subjectId,
+              if (sectionId != null) 'sectionId': sectionId,
+              if (batchId != null) 'batchId': batchId,
+            });
+    final data = await _client.get(path);
+    if (data is! Map) {
+      throw const ApiException.serverError();
+    }
+    return StudentWiseReport.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// Downloads the additive student-wise matrix export (xlsx/pdf). Uses the
+  /// same locked M10B contract as [getStudentWiseReport].
+  Future<DownloadPayload> exportStudentWiseReport(String format,
+      {required int subjectId,
+      int? sectionId,
+      int? batchId,
+      DateTime? startDate,
+      DateTime? endDate}) async {
+    final path = _query('/teacher/attendance/student-wise/export.$format',
+            startDate: startDate, endDate: endDate,
+            extra: {
+              'subjectId': subjectId,
+              if (sectionId != null) 'sectionId': sectionId,
+              if (batchId != null) 'batchId': batchId,
+            });
+    return _download(path,
+        fallbackName: 'dagacs_teacher_student_wise'
+            '${_dateSuffix(startDate, endDate)}.$format');
+  }
+
   // ── Internal helpers ───────────────────────────────────────────
 
   String _query(String base,
       {int? page,
       int? size,
       DateTime? startDate,
-      DateTime? endDate}) {
+      DateTime? endDate,
+      Map<String, Object>? extra}) {
     final params = <String>[];
     if (page != null) {
       params.add('page=$page');
@@ -110,6 +160,11 @@ class ReportRepository {
     }
     if (endDate != null) {
       params.add('endDate=${_formatDate(endDate)}');
+    }
+    if (extra != null) {
+      for (final entry in extra.entries) {
+        params.add('${entry.key}=${entry.value}');
+      }
     }
     return params.isEmpty ? base : '$base?${params.join('&')}';
   }

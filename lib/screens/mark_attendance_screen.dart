@@ -12,8 +12,8 @@ import '../widgets/dagacs_widgets.dart';
 /// Screen for marking or updating attendance for a single session.
 ///
 /// Students without an existing record start as UNMARKED (local UI state).
-/// Every student must be explicitly set to PRESENT or ABSENT before
-/// submission. UNMARKED is never sent to the backend.
+/// UNMARKED students submitted as-is default to ABSENT. UNMARKED is never
+/// sent to the backend; the submit loop resolves it to ABSENT on the client.
 ///
 /// Students with existing records use PUT per-record.
 /// Students without existing records use batch POST.
@@ -165,29 +165,18 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
   Future<void> _submit() async {
     if (_sessionCancelled) return;
 
-    // Validate: every student must be explicitly marked.
-    final unmarked =
-        _students.where((s) => s.id != null && !_statusMap.containsKey(s.id));
-    if (unmarked.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please mark attendance for all students.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
     setState(() => _submitting = true);
 
     // Split into existing (PUT) and new (batch POST).
+    // UNMARKED students default to ABSENT (kept local; the backend only
+    // ever receives explicit PRESENT/ABSENT records).
     final newItems = <AttendanceMarkItem>[];
     String? putError;
 
     for (final student in _students) {
       final sid = student.id;
       if (sid == null) continue;
-      final newStatus = _statusMap[sid]!;
+      final newStatus = _statusMap[sid] ?? 'ABSENT';
 
       if (_existingRecordIds.containsKey(sid)) {
         // Existing record: use PUT.
@@ -367,8 +356,17 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
                               Text(student.name ?? 'Unknown',
                                   style: Theme.of(context).textTheme.titleSmall),
                               const SizedBox(height: DagacsSpace.xs),
-                              Text(student.rollNumber ?? 'No roll number',
-                                  style: Theme.of(context).textTheme.bodySmall),
+                              Text(
+                                [
+                                  if (student.enrollmentNumber != null &&
+                                      student.enrollmentNumber!.isNotEmpty)
+                                    'Enroll: ${student.enrollmentNumber}',
+                                  if (student.rollNumber != null &&
+                                      student.rollNumber!.isNotEmpty)
+                                    'Roll: ${student.rollNumber}',
+                                ].join(' · '),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ],
                           ),
                         ),

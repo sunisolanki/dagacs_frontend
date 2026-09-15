@@ -322,4 +322,119 @@ void main() {
       }
     });
   });
+
+  group('ReportRepository.getStudentWiseReport', () {
+    test('sends subjectId/sectionId and parses the matrix', () async {
+      String? seenPath;
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenQuery = req.url.queryParameters;
+          return http.Response(
+              '{"subjectId":1,"subjectName":"DBMS","sectionId":2,'
+              '"sectionName":"CSE-A",'
+              '"columns":[{"sessionId":100,"date":"2026-01-10","lecturePeriod":"LP1"},'
+              '{"sessionId":101,"date":"2026-01-10","lecturePeriod":"LP2"}],'
+              '"rows":[{"studentId":10,"rollNumber":"CS-A-001",'
+              '"enrollmentNumber":"ENG-0001","name":"Alice",'
+              '"presentCount":1,"totalRecordedCount":2,"percentage":50.0,'
+              '"cells":[{"sessionId":100,"status":"PRESENT","isPresent":true},'
+              '{"sessionId":101,"status":"ABSENT","isPresent":false}]}]}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = ReportRepository(client);
+      final report = await repo.getStudentWiseReport(
+          subjectId: 1, sectionId: 2);
+      expect(seenPath, '/api/teacher/attendance/student-wise');
+      expect(seenQuery!['subjectId'], '1');
+      expect(seenQuery!['sectionId'], '2');
+      expect(seenQuery!.containsKey('batchId'), isFalse);
+      expect(seenQuery!.containsKey('teacherId'), isFalse);
+      expect(report.columns.length, 2);
+      expect(report.rows.single.enrollmentNumber, 'ENG-0001');
+      expect(report.rows.single.cellStatus(101), 'ABSENT');
+    });
+
+    test('batch selection uses batchId without sectionId', () async {
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenQuery = req.url.queryParameters;
+          return http.Response(
+              '{"columns":[],"rows":[]}', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = ReportRepository(client);
+      await repo.getStudentWiseReport(
+          subjectId: 3, batchId: 9);
+      expect(seenQuery!['subjectId'], '3');
+      expect(seenQuery!['batchId'], '9');
+      expect(seenQuery!.containsKey('sectionId'), isFalse);
+    });
+  });
+
+  group('ReportRepository.exportStudentWiseReport', () {
+    test('exports xlsx with subjectId and sectionId in query', () async {
+      String? seenPath;
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenQuery = req.url.queryParameters;
+          return http.Response.bytes(
+            Uint8List.fromList(const [0x50, 0x4b]),
+            200,
+            headers: {
+              'content-disposition':
+                  'attachment; filename="dagacs_teacher_student_wise_all.xlsx"',
+              'content-type':
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            },
+          );
+        }),
+      );
+      final repo = ReportRepository(client);
+      final payload = await repo.exportStudentWiseReport('xlsx',
+          subjectId: 1, sectionId: 2);
+      expect(seenPath, '/api/teacher/attendance/student-wise/export.xlsx');
+      expect(seenQuery!['subjectId'], '1');
+      expect(seenQuery!['sectionId'], '2');
+      expect(payload.fileName, 'dagacs_teacher_student_wise_all.xlsx');
+    });
+
+    test('never sends teacherId/studentId/departmentId', () async {
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenQuery = req.url.queryParameters;
+          return http.Response.bytes(
+            Uint8List.fromList(const [0x50, 0x4b]),
+            200,
+            headers: {
+              'content-disposition':
+                  'attachment; filename="dagacs_teacher_student_wise_all.xlsx"',
+              'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            },
+          );
+        }),
+      );
+      final repo = ReportRepository(client);
+      await repo.exportStudentWiseReport('xlsx', subjectId: 1, sectionId: 2);
+      expect(seenQuery!.containsKey('teacherId'), isFalse);
+      expect(seenQuery!.containsKey('studentId'), isFalse);
+      expect(seenQuery!.containsKey('departmentId'), isFalse);
+    });
+  });
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../core/navigation/navigator.dart';
 import '../models/teacher_report_row.dart';
 import '../network/api_exception.dart';
 import '../repositories/report_repository.dart';
+import '../repositories/teacher_repository.dart';
 import '../services/report_file_downloader.dart';
 import '../widgets/report_widgets.dart';
 
@@ -10,16 +12,23 @@ import '../widgets/report_widgets.dart';
 ///
 /// Shows the authenticated teacher's own subject-wise attendance report
 /// (M7.1 `GET /api/teacher/attendance/report`) and exposes the M7.2 Excel/PDF
-/// exports. Self-scope is always derived from the JWT - the UI has no
-/// teacher/student/department/section selectors.
+/// exports plus the additive student-wise register. Self-scope is always
+/// derived from the JWT - the UI has no teacher/student/department/section
+/// selectors.
 class TeacherReportsScreen extends StatefulWidget {
   const TeacherReportsScreen({
     super.key,
     required this.reportRepository,
+    this.teacherRepository,
     this.downloadFile = downloadReportFile,
   });
 
   final ReportRepository reportRepository;
+
+  /// Optional: when provided, an AppBar action opens the additive student-wise
+  /// register (which needs the teacher's assignments). Null keeps the legacy
+  /// reports-only surface for callers that do not fetch assignments.
+  final TeacherRepository? teacherRepository;
   final ReportFileDownloader downloadFile;
 
   @override
@@ -157,7 +166,19 @@ class _TeacherReportsScreenState extends State<TeacherReportsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Reports')),
+      appBar: AppBar(
+        title: const Text('My Reports'),
+        actions: [
+          if (widget.teacherRepository != null)
+            IconButton(
+              key: const Key('student-wise-register'),
+              tooltip: 'Student-wise register',
+              icon: const Icon(Icons.grid_on),
+              onPressed: () => Navigator.of(context)
+                  .pushNamed(AppRoutes.teacherStudentWise),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [

@@ -56,7 +56,7 @@ void main() {
     const expectations = <String, String>{
       'ADMIN': 'Configure institutional master data and manage students',
       'TEACHER': 'Create sessions, mark attendance, and run reports',
-      'HOD': 'Department analytics, coverage, and reports',
+      'HOD': 'Department analytics, coverage, reports, and teaching your assigned classes',
       'STUDENT': 'Track attendance and review your academic profile',
     };
 

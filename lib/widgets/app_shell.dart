@@ -70,6 +70,9 @@ class AppShell extends StatelessWidget {
               Icons.insights_outlined, 'Analytics', AppRoutes.hodDashboard),
           _AppDestination(
               Icons.assessment_outlined, 'Reports', AppRoutes.hodReports),
+          _AppDestination(
+              Icons.fact_check_outlined, 'My Classes',
+              AppRoutes.teacherClasses),
         ];
       case 'TEACHER':
         return const [

@@ -81,7 +81,7 @@ class HomeScreen extends StatelessWidget {
       case 'TEACHER':
         return 'Create sessions, mark attendance, and run reports';
       case 'HOD':
-        return 'Department analytics, coverage, and reports';
+        return 'Department analytics, coverage, reports, and teaching your assigned classes';
       case 'STUDENT':
         return 'Track attendance and review your academic profile';
       default:
@@ -135,7 +135,7 @@ class HomeScreen extends StatelessWidget {
       case 'TEACHER':
         return 'Sessions, attendance, and exports';
       case 'HOD':
-        return 'Analytics, coverage, and reports';
+        return 'Analytics, coverage, reports, and teaching';
       default:
         return 'Attendance, reports, and profile';
     }
@@ -314,6 +314,15 @@ class HomeScreen extends StatelessWidget {
           subtitle:
               'Daily lecture, coverage, rollups, low attendance and exports',
           onTap: () => Navigator.pushNamed(context, AppRoutes.hodReports),
+        ),
+      );
+      tiles.add(
+        AppFeatureTile(
+          key: const Key('hod-my-classes-tile'),
+          icon: Icons.class_outlined,
+          title: sideNavVisible ? null : 'My Classes',
+          subtitle: 'Your assigned classes with Take Attendance',
+          onTap: () => Navigator.pushNamed(context, AppRoutes.teacherClasses),
         ),
       );
     }

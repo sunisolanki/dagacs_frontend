@@ -118,8 +118,9 @@ void main() {
       expect(find.text('Absent'), findsOneWidget);
     });
 
-    testWidgets('submission blocked when any student is UNMARKED',
+    testWidgets('UNMARKED student defaults to ABSENT on submit',
         (tester) async {
+      AttendanceMarkRequest? capturedMark;
       final repo = _FakeAttendanceRepository();
       repo.onGetSessions = () async => [
             const AttendanceSession(id: 1, status: 'SCHEDULED'),
@@ -129,6 +130,15 @@ void main() {
             const SessionStudent(id: 2, rollNumber: 'R2', name: 'Bob'),
           ];
       repo.onGetRecords = () async => [];
+      repo.onMarkAttendance = (req) async {
+        capturedMark = req;
+        return [
+          const AttendanceRecord(
+              id: 1, studentId: 1, status: 'PRESENT', isPresent: true),
+          const AttendanceRecord(
+              id: 2, studentId: 2, status: 'ABSENT', isPresent: false),
+        ];
+      };
 
       await tester.pumpWidget(MaterialApp(
           home: MarkAttendanceScreen(
@@ -139,12 +149,16 @@ void main() {
       await tester.tap(find.text('Unmarked').first);
       await tester.pumpAndSettle();
 
-      // Submit
+      // Submit — UNMARKED Bob must default to ABSENT, not block
       await tester.tap(find.text('SUBMIT'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Please mark attendance for all students.'),
-          findsOneWidget);
+      expect(capturedMark, isNotNull);
+      final byStudent = {
+        for (final item in capturedMark!.items) item.studentId: item.status,
+      };
+      expect(byStudent[1], 'PRESENT');
+      expect(byStudent[2], 'ABSENT');
     });
 
     testWidgets('submission proceeds when all students are marked',
@@ -448,7 +462,8 @@ void main() {
       expect(capturedMark!.items.first.studentId, 2);
     });
 
-    testWidgets('UNMARKED is never sent to backend', (tester) async {
+    testWidgets('UNMARKED is resolved to ABSENT, never sent as UNMARKED',
+        (tester) async {
       AttendanceMarkRequest? capturedMark;
       final repo = _FakeAttendanceRepository();
       repo.onGetSessions = () async => [
@@ -473,14 +488,15 @@ void main() {
       await tester.tap(find.text('Unmarked').first);
       await tester.pumpAndSettle();
 
-      // Attempt submit — should be blocked
+      // Submit — Bob defaults to ABSENT, batch POST is called
       await tester.tap(find.text('SUBMIT'));
       await tester.pumpAndSettle();
 
-      // Submit was blocked, batch POST was never called
-      expect(capturedMark, isNull);
-      expect(find.text('Please mark attendance for all students.'),
-          findsOneWidget);
+      expect(capturedMark, isNotNull);
+      final statuses = capturedMark!.items.map((i) => i.status).toSet();
+      expect(statuses.contains('UNMARKED'), isFalse);
+      expect(statuses.contains('ABSENT'), isTrue);
+      expect(capturedMark!.items.any((i) => i.studentId == 2), isTrue);
     });
 
     testWidgets('update failure shows error and reverts local state',

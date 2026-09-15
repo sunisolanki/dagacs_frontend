@@ -221,34 +221,60 @@ void main() {
   });
 
   group('StudentManagementRepository.provisionLogin', () {
-    test('POSTs the write-only password to admin/students/{id}/login',
-        () async {
+    test('POSTs to admin/students/{id}/login without a password and parses'
+        ' the temporary password', () async {
       String? method;
       String? seenPath;
-      Object? body;
+      String? seenBody;
       final client = ApiClient(
         baseUrl: 'http://test.local/api',
         tokenProvider: () async => 'admin-token',
         httpClient: _MockClient((req) {
           method = req.method;
           seenPath = req.url.path;
-          body = jsonDecode(req.body);
+          seenBody = req.body;
           return http.Response(
               '{"id":3,"rollNumber":"2201CE001","name":"Rahul Kumar",'
-              '"loginLinked":true,"loginStatus":"ACTIVE"}',
+              '"loginLinked":true,"loginStatus":"ACTIVE",'
+              '"mustChangePassword":true,"temporaryPassword":"TempPass#2026"}',
               201,
               headers: {'content-type': 'application/json'});
         }),
       );
       final repo = StudentManagementRepository(client);
-      final student = await repo.provisionLogin(
-          3, const StudentLoginPasswordRequest('StuPass#1'));
-      final bodyMap = body! as Map;
+      final student = await repo.provisionLogin(3);
       expect(method, 'POST');
       expect(seenPath, '/api/admin/students/3/login');
-      expect(bodyMap['password'], 'StuPass#1');
+      expect(seenBody, isEmpty);
       expect(student.hasLogin, isTrue);
       expect(student.loginStatus, 'ACTIVE');
+      expect(student.mustChangePassword, isTrue);
+      expect(student.temporaryPassword, 'TempPass#2026');
+    });
+
+    test('throws 400 with the backend message when the student has no email',
+        () async {
+      final client = _clientReturning(
+          400, '{"error":"Unauthorized","message":"The student has no email to link a login to"}');
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.provisionLogin(4),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 400)
+            .having((e) => e.message, 'message',
+                'The student has no email to link a login to')),
+      );
+    });
+
+    test('throws 409 when the email already owns a login', () async {
+      final client =
+          _clientReturning(409, '{"message":"Email is already in use by a login account"}');
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.provisionLogin(3),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 409)),
+      );
     });
   });
 

@@ -39,6 +39,7 @@ import 'screens/student_profile_screen.dart';
 import 'screens/student_management_screen.dart';
 import 'screens/teacher_classes_screen.dart';
 import 'screens/teacher_reports_screen.dart';
+import 'screens/student_wise_report_screen.dart';
 import 'screens/change_password_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -217,7 +218,13 @@ class DAGACSApp extends StatelessWidget {
           case AppRoutes.teacherReports:
             return MaterialPageRoute(
                 builder: (_) => TeacherReportsScreen(
-                    reportRepository: AppDependencies.reportRepository));
+                    reportRepository: AppDependencies.reportRepository,
+                    teacherRepository: AppDependencies.teacherRepository));
+          case AppRoutes.teacherStudentWise:
+            return MaterialPageRoute(
+                builder: (_) => StudentWiseReportScreen(
+                    reportRepository: AppDependencies.reportRepository,
+                    teacherRepository: AppDependencies.teacherRepository));
           case AppRoutes.adminStudents:
             return MaterialPageRoute(
                 builder: (_) => StudentManagementScreen(

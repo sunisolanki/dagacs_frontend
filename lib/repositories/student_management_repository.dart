@@ -82,12 +82,14 @@ class StudentManagementRepository {
   }
 
   /// Provisions a STUDENT login account linked by the student's email (M9.5.2).
-  /// 409 if the student already has a login or the email is owned elsewhere.
-  Future<StudentManagement> provisionLogin(
-      int id, StudentLoginPasswordRequest request) async {
+  /// The backend generates a secure temporary password and sets
+  /// mustChangePassword=true; the response carries the temporary password
+  /// exactly once (never returned again by later GETs).
+  /// 409 if the student already has a login or the email is owned elsewhere;
+  /// 400 if the student has no email to link a login to.
+  Future<StudentManagement> provisionLogin(int id) async {
     try {
-      final data =
-          await _client.post('/admin/students/$id/login', body: request.toJson());
+      final data = await _client.post('/admin/students/$id/login');
       if (data is! Map) {
         throw const ApiException.serverError();
       }

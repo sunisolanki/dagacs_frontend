@@ -249,7 +249,7 @@ void main() {
       expect(repo.updateAttendanceCallCount, 0);
     });
 
-    testWidgets('submission blocked when UNMARKED student exists',
+    testWidgets('UNMARKED student defaults to ABSENT on submit',
         (tester) async {
       final repo = _TrackingAttendanceRepository();
       repo.onGetSessions = () async => [const AttendanceSession(id: 1, status: 'SCHEDULED')];
@@ -258,21 +258,24 @@ void main() {
             const SessionStudent(id: 2, rollNumber: 'R2', name: 'Bob'),
           ];
       repo.onGetRecords = () async => [];
+      repo.onMarkAttendance = (req) async {
+        return [];
+      };
 
       await tester.pumpWidget(MaterialApp(
         home: MarkAttendanceScreen(sessionId: 1, attendanceRepository: repo),
       ));
       await tester.pumpAndSettle();
 
+      // Mark only Alice; Bob stays UNMARKED -> defaults to ABSENT
       await tester.tap(find.text('Unmarked').first);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('SUBMIT'));
       await tester.pumpAndSettle();
 
-      expect(repo.markAttendanceCallCount, 0);
+      expect(repo.markAttendanceCallCount, 1);
       expect(repo.updateAttendanceCallCount, 0);
-      expect(find.text('Please mark attendance for all students.'), findsOneWidget);
     });
   });
 }
