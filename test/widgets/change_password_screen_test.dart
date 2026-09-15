@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dagacs_frontend/core/session/session_controller.dart';
 import 'package:dagacs_frontend/models/auth_response.dart';
 import 'package:dagacs_frontend/network/api_client.dart';
@@ -7,7 +9,24 @@ import 'package:dagacs_frontend/repositories/student_management_repository.dart'
 import 'package:dagacs_frontend/screens/change_password_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _MockClient extends http.BaseClient {
+  _MockClient(this._handler);
+  final http.Response Function(http.Request request) _handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final req = request as http.Request;
+    final resp = _handler(req);
+    return http.StreamedResponse(
+      Stream.value(utf8.encode(resp.body)),
+      resp.statusCode,
+      headers: resp.headers,
+    );
+  }
+}
 
 class _FakeAuthRepository extends AuthRepository {
   _FakeAuthRepository();
@@ -179,5 +198,78 @@ void main() {
     expect(find.text('Current password is incorrect'), findsOneWidget);
     expect(session.mustChangePassword, isTrue);
     expect(repo.changeCalled, isTrue);
+  });
+
+  testWidgets(
+      'successful empty-body 200 from real repository shows no error '
+      'and navigates to student home', (tester) async {
+    final client = ApiClient(
+      baseUrl: 'http://test.local/api',
+      tokenProvider: () async => 'student-token',
+      httpClient: _MockClient((req) {
+        return http.Response('', 200,
+            headers: {'content-type': 'application/json'});
+      }),
+    );
+    final repo = StudentManagementRepository(client);
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('STUDENT',
+        email: 's@dagacs.local',
+        fullName: 'Student',
+        mustChangePassword: true);
+
+    await tester.pumpWidget(_buildApp(session, repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('field-current-password')), 'Temp#Old2026');
+    await tester.enterText(
+        find.byKey(const Key('field-new-password')), 'NewPass#2026');
+    await tester.enterText(
+        find.byKey(const Key('field-confirm-password')), 'NewPass#2026');
+    await tester.ensureVisible(find.text('Update Password'));
+    await tester.tap(find.text('Update Password'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Something went wrong. Please try again.'), findsNothing);
+    expect(find.text('HOME-ROUTE'), findsOneWidget);
+    expect(session.mustChangePassword, isFalse);
+    expect(session.isAuthenticated, isTrue);
+  });
+
+  testWidgets(
+      'non-2xx error from real repository displays backend error message '
+      'and does not navigate', (tester) async {
+    final client = ApiClient(
+      baseUrl: 'http://test.local/api',
+      tokenProvider: () async => 'student-token',
+      httpClient: _MockClient((req) {
+        return http.Response(
+            '{"message":"Current password is incorrect"}', 400,
+            headers: {'content-type': 'application/json'});
+      }),
+    );
+    final repo = StudentManagementRepository(client);
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('STUDENT',
+        email: 's@dagacs.local', mustChangePassword: true);
+
+    await tester.pumpWidget(_buildApp(session, repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byKey(const Key('field-current-password')), 'Wrong#Pass1');
+    await tester.enterText(
+        find.byKey(const Key('field-new-password')), 'NewPass#2026');
+    await tester.enterText(
+        find.byKey(const Key('field-confirm-password')), 'NewPass#2026');
+    await tester.ensureVisible(find.text('Update Password'));
+    await tester.tap(find.text('Update Password'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current password is incorrect'), findsOneWidget);
+    expect(find.text('Something went wrong. Please try again.'), findsNothing);
+    expect(find.text('HOME-ROUTE'), findsNothing);
+    expect(session.mustChangePassword, isTrue);
   });
 }

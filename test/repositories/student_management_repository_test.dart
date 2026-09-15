@@ -351,6 +351,42 @@ void main() {
       expect(bodyMap['confirmPassword'], 'BrandNew#2026');
     });
 
+    test('accepts successful empty-body 200 without throwing', () async {
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'student-token',
+        httpClient: _MockClient((req) {
+          return http.Response('', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.changePassword(
+          currentPassword: 'Temp#Old2026',
+          newPassword: 'BrandNew#2026',
+          confirmPassword: 'BrandNew#2026',
+        ),
+        completes,
+      );
+    });
+
+    test('propagates a non-2xx ApiException', () async {
+      final client = _clientReturning(400, '{"message":"Current password is incorrect"}');
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.changePassword(
+          currentPassword: 'Wrong#Pass1',
+          newPassword: 'BrandNew#2026',
+          confirmPassword: 'BrandNew#2026',
+        ),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 400)
+            .having((e) => e.message, 'message',
+                'Current password is incorrect')),
+      );
+    });
+
     test('propagates a 403 ApiException', () async {
       final client = _clientReturning(403, '{"message":"Forbidden"}');
       final repo = StudentManagementRepository(client);

@@ -137,18 +137,11 @@ class StudentManagementRepository {
     required String newPassword,
     required String confirmPassword,
   }) async {
-    try {
-      final data = await _client.put('/student/change-password', body: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-        'confirmPassword': confirmPassword,
-      });
-      if (data is! Map) {
-        throw const ApiException.serverError();
-      }
-    } on ApiException {
-      rethrow;
-    }
+    await _client.put('/student/change-password', body: {
+      'currentPassword': currentPassword,
+      'newPassword': newPassword,
+      'confirmPassword': confirmPassword,
+    });
   }
 
   /// Downloads the one-time bulk-import credential artifact (XLSX) by id
