@@ -89,7 +89,18 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   _FakeStudentManagementRepository() : super(ApiClient());
 
   @override
-  Future<List<StudentManagement>> getStudents() async => const [];
+  Future<StudentPage> searchStudents(StudentSearchQuery query) async =>
+      const StudentPage();
+
+  @override
+  Future<StudentFilterOptionsData> getFilterOptions({
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? batchId,
+    int? sectionId,
+  }) async =>
+      const StudentFilterOptionsData();
 }
 
 class _FakeAttendanceRepository extends AttendanceRepository {

@@ -53,36 +53,110 @@ ApiClient _capturingClient(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('StudentManagementRepository.getStudents', () {
-    test('sends GET to admin/students and parses the list', () async {
+  group('StudentManagementRepository.searchStudents', () {
+    test('sends GET to admin/students with default page params and parses the page',
+        () async {
       String? seenPath;
+      Map<String, String>? seenQuery;
       final client = ApiClient(
         baseUrl: 'http://test.local/api',
         tokenProvider: () async => 'admin-token',
         httpClient: _MockClient((req) {
           seenPath = req.url.path;
+          seenQuery = req.url.queryParameters;
           return http.Response(
-              '[{"id":1,"rollNumber":"2201CE001","name":"Rahul Kumar",'
-              '"status":"ACTIVE"},{"id":2,"rollNumber":"2201CE002",'
-              '"name":"Anjali","status":"INACTIVE"}]',
+              '{"content":[{"id":1,"rollNumber":"2201CE001",'
+              '"name":"Rahul Kumar","status":"ACTIVE"},'
+              '{"id":2,"rollNumber":"2201CE002",'
+              '"name":"Anjali","status":"INACTIVE"}],'
+              '"page":0,"size":20,"totalElements":2,"totalPages":1}',
               200,
               headers: {'content-type': 'application/json'});
         }),
       );
       final repo = StudentManagementRepository(client);
-      final students = await repo.getStudents();
+      final page =
+          await repo.searchStudents(const StudentSearchQuery());
       expect(seenPath, '/api/admin/students');
-      expect(students, hasLength(2));
-      expect(students.first.rollNumber, '2201CE001');
-      expect(students.first.isActive, isTrue);
-      expect(students.last.status, 'INACTIVE');
+      expect(seenQuery!['page'], '0');
+      expect(seenQuery!['size'], '20');
+      expect(page.content, hasLength(2));
+      expect(page.totalElements, 2);
+      expect(page.totalPages, 1);
+      expect(page.isEmpty, isFalse);
+      expect(page.content.first.rollNumber, '2201CE001');
+      expect(page.content.first.isActive, isTrue);
+      expect(page.content.last.status, 'INACTIVE');
     });
 
-    test('throws serverError when response is not a list', () async {
-      final client = _clientReturning(200, '{"id":1}');
+    test('sends every explicitly selected filter as a query parameter',
+        () async {
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seenQuery = req.url.queryParameters;
+          return http.Response(
+              '{"content":[],"page":0,"size":20,"totalElements":0,'
+              '"totalPages":0}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      await repo.searchStudents(const StudentSearchQuery(
+        search: '  rahul  ',
+        academicSessionId: 1,
+        programId: 2,
+        semesterId: 3,
+        batchId: 4,
+        sectionId: 5,
+        status: 'ACTIVE',
+        loginStatus: 'ACTIVE',
+        page: 1,
+        size: 50,
+      ));
+      expect(seenQuery!['search'], 'rahul');
+      expect(seenQuery!['academicSessionId'], '1');
+      expect(seenQuery!['programId'], '2');
+      expect(seenQuery!['semesterId'], '3');
+      expect(seenQuery!['batchId'], '4');
+      expect(seenQuery!['sectionId'], '5');
+      expect(seenQuery!['status'], 'ACTIVE');
+      expect(seenQuery!['loginStatus'], 'ACTIVE');
+      expect(seenQuery!['page'], '1');
+      expect(seenQuery!['size'], '50');
+    });
+
+    test('omits unset filters from the query', () async {
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seenQuery = req.url.queryParameters;
+          return http.Response(
+              '{"content":[],"page":0,"size":20,"totalElements":0,'
+              '"totalPages":0}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      await repo.searchStudents(const StudentSearchQuery(page: 2));
+      expect(seenQuery!.containsKey('search'), isFalse);
+      expect(seenQuery!.containsKey('status'), isFalse);
+      expect(seenQuery!.containsKey('academicSessionId'), isFalse);
+      expect(seenQuery!['page'], '2');
+      expect(seenQuery!['size'], '20');
+    });
+
+    test('throws serverError when response is not an object', () async {
+      final client = _clientReturning(200, '[]');
       final repo = StudentManagementRepository(client);
       expect(
-        repo.getStudents(),
+        repo.searchStudents(const StudentSearchQuery()),
         throwsA(isA<ApiException>()
             .having((e) => e.statusCode, 'statusCode', 500)),
       );
@@ -92,9 +166,78 @@ void main() {
       final client = _clientReturning(403, '{"error":"Forbidden"}');
       final repo = StudentManagementRepository(client);
       expect(
-        repo.getStudents(),
+        repo.searchStudents(const StudentSearchQuery()),
         throwsA(isA<ApiException>()
             .having((e) => e.statusCode, 'statusCode', 403)),
+      );
+    });
+  });
+
+  group('StudentManagementRepository.getFilterOptions', () {
+    test('sends GET to admin/students/filter-options and parses the lists',
+        () async {
+      String? seenPath;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          return http.Response(
+              '{"academicSessions":[{"id":1,"name":"2026-27"}],'
+              '"programs":[{"id":10,"name":"Computer Science"}],'
+              '"semesters":[{"id":3,"name":"Sem 1","code":"S1"}],'
+              '"batches":[{"id":7,"name":"B1"}],'
+              '"sections":[{"id":5,"name":"A"}]}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      final options = await repo.getFilterOptions(academicSessionId: 1);
+      expect(seenPath, '/api/admin/students/filter-options');
+      expect(options.academicSessions.single.name, '2026-27');
+      expect(options.programs.single.displayName, 'Computer Science');
+      expect(options.semesters.single.name, 'Sem 1');
+      expect(options.batches.single.name, 'B1');
+      expect(options.sections.single.id, 5);
+    });
+
+    test('sends the selected parent ids to scope the options', () async {
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'admin-token',
+        httpClient: _MockClient((req) {
+          seenQuery = req.url.queryParameters;
+          return http.Response(
+              '{"academicSessions":[],"programs":[],"semesters":[],'
+              '"batches":[],"sections":[]}',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentManagementRepository(client);
+      await repo.getFilterOptions(
+        academicSessionId: 1,
+        programId: 2,
+        semesterId: 3,
+        batchId: 4,
+        sectionId: 5,
+      );
+      expect(seenQuery!['academicSessionId'], '1');
+      expect(seenQuery!['programId'], '2');
+      expect(seenQuery!['semesterId'], '3');
+      expect(seenQuery!['batchId'], '4');
+      expect(seenQuery!['sectionId'], '5');
+    });
+
+    test('throws serverError when the response is not an object', () async {
+      final client = _clientReturning(200, '[]');
+      final repo = StudentManagementRepository(client);
+      expect(
+        repo.getFilterOptions(),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 500)),
       );
     });
   });

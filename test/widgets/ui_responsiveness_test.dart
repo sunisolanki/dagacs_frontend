@@ -55,8 +55,12 @@ class _FakeMasterDataRepository extends MasterDataRepository {
       const [Semester(id: 1, name: 'Semester 1', code: 'S1')];
 
   @override
+  Future<List<Semester>> getSemestersBySession(int sessionId) async =>
+      const [Semester(id: 1, name: 'Semester 1', code: 'S1')];
+
+  @override
   Future<List<Batch>> getBatches() async =>
-      const [Batch(id: 1, name: 'B1', batchCode: 'B1')];
+      const [Batch(id: 1, name: 'B1', batchCode: 'B1', academicSessionId: 1)];
 
   @override
   Future<List<Section>> getSections() async =>
@@ -96,18 +100,43 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   _FakeStudentManagementRepository() : super(ApiClient());
 
   @override
-  Future<List<StudentManagement>> getStudents() async => [
+  Future<StudentFilterOptionsData> getFilterOptions({
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? batchId,
+    int? sectionId,
+  }) async =>
+      const StudentFilterOptionsData();
+
+  @override
+  Future<StudentPage> searchStudents(StudentSearchQuery query) async {
+    return StudentPage(
+      content: [
         StudentManagement.fromJson({
           'id': 1,
           'rollNumber': '2201CE001',
           'enrollmentNumber': 'ENR-2026-0001',
           'name': 'Rahul Kumar Singh',
           'programName': 'Computer Science and Engineering',
+          'academicSessionName': '2026-27',
+          'semesterName': 'Sem 1',
           'batchName': '2026 Batch Alpha',
           'sectionName': 'Section Alpha',
           'status': 'ACTIVE',
+          'academicSessionId': 1,
+          'programId': 1,
+          'semesterId': 1,
+          'batchId': 1,
+          'sectionId': 1,
         }),
-      ];
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    );
+  }
 }
 
 const _sizes = <Size>[

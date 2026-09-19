@@ -23,6 +23,10 @@ class StudentManagement {
   final String? batchName;
   final int? sectionId;
   final String? sectionName;
+  final int? semesterId;
+  final String? semesterName;
+  final int? academicSessionId;
+  final String? academicSessionName;
   final bool? loginLinked;
   final String? loginStatus;
   final bool? mustChangePassword;
@@ -48,6 +52,10 @@ class StudentManagement {
     this.batchName,
     this.sectionId,
     this.sectionName,
+    this.semesterId,
+    this.semesterName,
+    this.academicSessionId,
+    this.academicSessionName,
     this.loginLinked,
     this.loginStatus,
     this.mustChangePassword,
@@ -75,6 +83,10 @@ class StudentManagement {
       batchName: json['batchName'] as String?,
       sectionId: json['sectionId'] as int?,
       sectionName: json['sectionName'] as String?,
+      semesterId: json['semesterId'] as int?,
+      semesterName: json['semesterName'] as String?,
+      academicSessionId: json['academicSessionId'] as int?,
+      academicSessionName: json['academicSessionName'] as String?,
       loginLinked: json['loginLinked'] as bool?,
       loginStatus: json['loginStatus'] as String?,
       mustChangePassword: json['mustChangePassword'] as bool?,
@@ -89,6 +101,14 @@ class StudentManagement {
   bool get loginIsActive => loginStatus == 'ACTIVE';
 
   bool get hasLogin => loginLinked == true;
+
+  /// Display labels per the approved UX: an active linked login shows
+  /// "LOGIN ACTIVE", an absent login account shows "NO LOGIN" (the backend
+  /// login status values stay ACTIVE/INACTIVE/NONE).
+  String get loginStatusLabel {
+    if (!hasLogin) return 'NO LOGIN';
+    return loginIsActive ? 'LOGIN ACTIVE' : 'LOGIN INACTIVE';
+  }
 }
 
 /// Login/account HTTP-y payloads (M9.5.2): the initial password for
@@ -118,8 +138,10 @@ class StudentManagementRequest {
   final String? admissionDate;
   final String? status;
   final int? programId;
+  final int? academicSessionId;
   final int? batchId;
   final int? sectionId;
+  final int? semesterId;
 
   const StudentManagementRequest({
     this.rollNumber,
@@ -134,8 +156,10 @@ class StudentManagementRequest {
     this.admissionDate,
     this.status,
     this.programId,
+    this.academicSessionId,
     this.batchId,
     this.sectionId,
+    this.semesterId,
   });
 
   factory StudentManagementRequest.fromStudent(StudentManagement student) =>
@@ -152,8 +176,10 @@ class StudentManagementRequest {
         admissionDate: student.admissionDate,
         status: student.status,
         programId: student.programId,
+        academicSessionId: student.academicSessionId,
         batchId: student.batchId,
         sectionId: student.sectionId,
+        semesterId: student.semesterId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -169,8 +195,10 @@ class StudentManagementRequest {
         if (admissionDate != null) 'admissionDate': admissionDate,
         if (status != null) 'status': status,
         if (programId != null) 'programId': programId,
+        if (academicSessionId != null) 'academicSessionId': academicSessionId,
         if (batchId != null) 'batchId': batchId,
         if (sectionId != null) 'sectionId': sectionId,
+        if (semesterId != null) 'semesterId': semesterId,
       };
 }
 
@@ -238,6 +266,195 @@ class StudentImportError {
       field: json['field'] as String?,
       message: json['message'] as String?,
       status: (json['status'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Paged result of the ADMIN student search (backend `StudentPageResponse`).
+///
+/// The backend sorts by student name and caps `size` at 100; the page is
+/// 0-indexed and `totalPages` is derived from `totalElements / size`.
+class StudentPage {
+  final List<StudentManagement> content;
+  final int page;
+  final int size;
+  final int totalElements;
+  final int totalPages;
+
+  const StudentPage({
+    this.content = const [],
+    this.page = 0,
+    this.size = 0,
+    this.totalElements = 0,
+    this.totalPages = 0,
+  });
+
+  factory StudentPage.fromJson(Map<String, dynamic> json) {
+    final rawContent = json['content'];
+    return StudentPage(
+      content: rawContent is List
+          ? rawContent
+              .whereType<Map>()
+              .map((e) => StudentManagement.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      page: (json['page'] as num?)?.toInt() ?? 0,
+      size: (json['size'] as num?)?.toInt() ?? 0,
+      totalElements: (json['totalElements'] as num?)?.toInt() ?? 0,
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  bool get isEmpty => content.isEmpty;
+  bool get hasMore => page + 1 < totalPages;
+}
+
+/// The student-search filter query. Every field is optional; a null field is
+/// simply not sent (the backend applies equality only for explicitly selected
+/// ids - never any cascade logic). Populated here by the UI in the approved
+/// dependency order: Academic Session -> Program -> Semester -> Batch -> Section.
+class StudentSearchQuery {
+  final String? search;
+  final int? academicSessionId;
+  final int? programId;
+  final int? semesterId;
+  final int? batchId;
+  final int? sectionId;
+  final String? status;
+  final String? loginStatus;
+  final int page;
+  final int size;
+
+  const StudentSearchQuery({
+    this.search,
+    this.academicSessionId,
+    this.programId,
+    this.semesterId,
+    this.batchId,
+    this.sectionId,
+    this.status,
+    this.loginStatus,
+    this.page = 0,
+    this.size = 20,
+  });
+
+  StudentSearchQuery copyWith({
+    String? search,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? batchId,
+    int? sectionId,
+    String? status,
+    String? loginStatus,
+    int? page,
+    int? size,
+  }) {
+    return StudentSearchQuery(
+      search: search ?? this.search,
+      academicSessionId: academicSessionId ?? this.academicSessionId,
+      programId: programId ?? this.programId,
+      semesterId: semesterId ?? this.semesterId,
+      batchId: batchId ?? this.batchId,
+      sectionId: sectionId ?? this.sectionId,
+      status: status ?? this.status,
+      loginStatus: loginStatus ?? this.loginStatus,
+      page: page ?? this.page,
+      size: size ?? this.size,
+    );
+  }
+
+  /// Query parameters for the GET, skipping every unset filter.
+  Map<String, dynamic> toQueryParameters() {
+    return {
+      if (search != null && search!.trim().isNotEmpty) 'search': search!.trim(),
+      if (academicSessionId != null) 'academicSessionId': academicSessionId,
+      if (programId != null) 'programId': programId,
+      if (semesterId != null) 'semesterId': semesterId,
+      if (batchId != null) 'batchId': batchId,
+      if (sectionId != null) 'sectionId': sectionId,
+      if (status != null) 'status': status,
+      if (loginStatus != null) 'loginStatus': loginStatus,
+      'page': page,
+      'size': size,
+    };
+  }
+}
+
+/// One selectable filter option (backend `StudentFilterOption`). The extra
+/// parent ids/names exist so options can be filtered/greyed client-side - e.g.
+/// a program option knows its parent session.
+class StudentFilterOption {
+  final int id;
+  final String? name;
+  final int? programId;
+  final String? programName;
+  final int? academicSessionId;
+  final String? academicSessionName;
+  final int? batchId;
+  final String? batchName;
+
+  const StudentFilterOption({
+    required this.id,
+    this.name,
+    this.programId,
+    this.programName,
+    this.academicSessionId,
+    this.academicSessionName,
+    this.batchId,
+    this.batchName,
+  });
+
+  factory StudentFilterOption.fromJson(Map<String, dynamic> json) {
+    return StudentFilterOption(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String?,
+      programId: (json['programId'] as num?)?.toInt(),
+      programName: json['programName'] as String?,
+      academicSessionId: (json['academicSessionId'] as num?)?.toInt(),
+      academicSessionName: json['academicSessionName'] as String?,
+      batchId: (json['batchId'] as num?)?.toInt(),
+      batchName: json['batchName'] as String?,
+    );
+  }
+
+  String get displayName => name ?? 'Unnamed';
+}
+
+/// The cascaded filter options (backend `StudentFilterOptionsResponse`). The
+/// lists come from the MASTER-DATA entities (never from student records), so
+/// options remain available even when no student matches.
+class StudentFilterOptionsData {
+  final List<StudentFilterOption> academicSessions;
+  final List<StudentFilterOption> programs;
+  final List<StudentFilterOption> semesters;
+  final List<StudentFilterOption> batches;
+  final List<StudentFilterOption> sections;
+
+  const StudentFilterOptionsData({
+    this.academicSessions = const [],
+    this.programs = const [],
+    this.semesters = const [],
+    this.batches = const [],
+    this.sections = const [],
+  });
+
+  factory StudentFilterOptionsData.fromJson(Map<String, dynamic> json) {
+    List<StudentFilterOption> parse(String key) {
+      final raw = json[key];
+      if (raw is! List) return const [];
+      return raw
+          .whereType<Map>()
+          .map((e) => StudentFilterOption.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    return StudentFilterOptionsData(
+      academicSessions: parse('academicSessions'),
+      programs: parse('programs'),
+      semesters: parse('semesters'),
+      batches: parse('batches'),
+      sections: parse('sections'),
     );
   }
 }

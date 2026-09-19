@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../core/theme/dagacs_theme.dart';
+import '../models/academic_session.dart';
 import '../models/batch.dart';
 import '../models/program.dart';
 import '../models/section.dart';
+import '../models/semester.dart';
 import '../models/student_management.dart';
 import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
@@ -52,50 +55,239 @@ class StudentManagementScreen extends StatefulWidget {
 }
 
 class _StudentManagementScreenState extends State<StudentManagementScreen> {
-  List<StudentManagement> _students = const [];
+  StudentPage _page = const StudentPage();
   bool _loading = true;
+  bool _initialLoading = true;
   String? _error;
 
   final _searchController = TextEditingController();
-  String _searchQuery = '';
+  Timer? _debounce;
+
+  StudentFilterOptionsData _filterOptions = const StudentFilterOptionsData();
+  int? _academicSessionId;
+  int? _programId;
+  int? _semesterId;
+  int? _batchId;
+  int? _sectionId;
+  String? _status;
+  String? _loginStatus;
+  int _pageIndex = 0;
+
+  int _pageSeq = 0;
+  int _filtersSeq = 0;
+
+  bool get _hasActiveFilters =>
+      _academicSessionId != null ||
+      _programId != null ||
+      _semesterId != null ||
+      _batchId != null ||
+      _sectionId != null ||
+      _status != null ||
+      _loginStatus != null ||
+      _searchController.text.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _refreshFilterOptions();
+    _loadPage(reset: true);
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  /// Reloads the first page (used by create/edit/status/login/import flows).
+  Future<void> _load() => _loadPage(reset: true);
+
+  /// Server-side search + filter + pagination. [reset] goes back to page 0.
+  Future<void> _loadPage({bool reset = false}) async {
+    final seq = ++_pageSeq;
+    final pageIndex = reset ? 0 : _pageIndex;
     setState(() {
       _loading = true;
       _error = null;
+      if (reset) _pageIndex = 0;
     });
     try {
-      final students = await widget.repository.getStudents();
-      if (!mounted) return;
+      final searchText = _searchController.text.trim();
+      final result = await widget.repository.searchStudents(StudentSearchQuery(
+        search: searchText.isEmpty ? null : searchText,
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        semesterId: _semesterId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+        status: _status,
+        loginStatus: _loginStatus,
+        page: pageIndex,
+        size: 20,
+      ));
+      if (!mounted || seq != _pageSeq) return;
       setState(() {
-        _students = students;
+        _page = result;
+        _pageIndex = result.page;
         _loading = false;
+        _initialLoading = false;
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _pageSeq) return;
       setState(() {
         _error = _messageFor(e);
         _loading = false;
+        _initialLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || seq != _pageSeq) return;
       setState(() {
         _error = 'Something went wrong while loading students.';
         _loading = false;
+        _initialLoading = false;
       });
     }
+  }
+
+  /// Fetches the cascaded master-data filter options for the CURRENT selection
+  /// (options are master-data sourced, so they remain available with zero
+  /// matching students). Runs alongside the page load; loses races to itself.
+  Future<void> _refreshFilterOptions() async {
+    final seq = ++_filtersSeq;
+    try {
+      final options = await widget.repository.getFilterOptions(
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        semesterId: _semesterId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+      );
+      if (!mounted || seq != _filtersSeq) return;
+      setState(() => _filterOptions = options);
+    } on ApiException {
+      // Options are best-effort: the list/search still work without them.
+    } catch (_) {
+      // Ignore unexpected option-load failures for the same reason.
+    }
+  }
+
+  void _goToPage(int page) {
+    _pageIndex = page;
+    _loadPage();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      _loadPage(reset: true);
+    });
+  }
+
+  /// Academic Session changes clear every downstream lock (Program, Semester,
+  /// Batch, Section) exactly on the approved dependency chain, then re-scope
+  /// the cascaded options and reload from page 0.
+  void _onAcademicSessionChanged(int? value) {
+    setState(() {
+      _academicSessionId = value;
+      _programId = null;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  void _onProgramChanged(int? value) {
+    setState(() {
+      _programId = value;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  void _onSemesterChanged(int? value) {
+    setState(() {
+      _semesterId = value;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  void _onBatchChanged(int? value) {
+    setState(() {
+      _batchId = value;
+      _sectionId = null;
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  void _onSectionChanged(int? value) {
+    setState(() => _sectionId = value);
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  void _onStatusChanged(String? value) {
+    setState(() => _status = value);
+    _loadPage(reset: true);
+  }
+
+  void _onLoginStatusChanged(String? value) {
+    setState(() => _loginStatus = value);
+    _loadPage(reset: true);
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _academicSessionId = null;
+      _programId = null;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+      _status = null;
+      _loginStatus = null;
+      _searchController.clear();
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
+  }
+
+  Future<void> _openFilterDialog() async {
+    final selection = await showDialog<_StudentFilterSelection>(
+      context: context,
+      builder: (_) => _StudentFiltersDialog(
+        repository: widget.repository,
+        options: _filterOptions,
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        semesterId: _semesterId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+        status: _status,
+        loginStatus: _loginStatus,
+      ),
+    );
+    if (selection == null || !mounted) return;
+    setState(() {
+      _academicSessionId = selection.academicSessionId;
+      _programId = selection.programId;
+      _semesterId = selection.semesterId;
+      _batchId = selection.batchId;
+      _sectionId = selection.sectionId;
+      _status = selection.status;
+      _loginStatus = selection.loginStatus;
+    });
+    _refreshFilterOptions();
+    _loadPage(reset: true);
   }
 
   String _messageFor(ApiException e) {
@@ -112,23 +304,6 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       default:
         return e.message;
     }
-  }
-
-  /// Client-side, case-insensitive search over the already-loaded student list
-  /// (name, roll number, enrollment number). The full dataset is in memory, so
-  /// no per-keystroke API call is made and no debounce is needed. An empty
-  /// (or whitespace-only) query restores the complete list.
-  List<StudentManagement> get _visibleStudents {
-    final query = _searchQuery.trim().toLowerCase();
-    if (query.isEmpty) return _students;
-    return _students.where((s) {
-      final name = s.name?.toLowerCase() ?? '';
-      final rollNumber = s.rollNumber?.toLowerCase() ?? '';
-      final enrollmentNumber = s.enrollmentNumber?.toLowerCase() ?? '';
-      return name.contains(query) ||
-          rollNumber.contains(query) ||
-          enrollmentNumber.contains(query);
-    }).toList();
   }
 
   Future<void> _openCreate() async {
@@ -367,79 +542,268 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
   }
 
   Widget _buildBody() {
+    if (_initialLoading) {
+      return const AppLoadingState(message: 'Loading students...');
+    }
+    if (_error != null && _page.content.isEmpty) {
+      return AppErrorState(message: _error!, onRetry: _load);
+    }
+    return Column(
+      children: [
+        _buildSearchArea(),
+        Expanded(child: _buildContent()),
+      ],
+    );
+  }
+
+  Widget _buildContent() {
     if (_loading) {
       return const AppLoadingState(message: 'Loading students...');
     }
     if (_error != null) {
       return AppErrorState(message: _error!, onRetry: _load);
     }
-    if (_students.isEmpty) {
-      return const AppEmptyState(
-        icon: Icons.person_off_outlined,
-        message: 'No students found. Use + to add one.',
-      );
+    if (_page.content.isEmpty) {
+      return _hasActiveFilters
+          ? const AppEmptyState(
+              icon: Icons.search_off,
+              message: 'No students match the current filters.',
+            )
+          : const AppEmptyState(
+              icon: Icons.person_off_outlined,
+              message: 'No students found. Use + to add one.',
+            );
     }
     return Column(
       children: [
-        _buildSearchBar(),
         Expanded(child: _buildStudentList()),
+        _buildPagination(),
       ],
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        DagacsSpace.lg,
-        DagacsSpace.sm,
-        DagacsSpace.lg,
-        DagacsSpace.sm,
+  /// Responsive filter row: the full search + dropdown bar on desktop, the
+  /// search field plus a Filters button (dialog/bottom-sheet style) on narrow
+  /// screens.
+  Widget _buildSearchArea() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < DagacsBreakpoints.narrow;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(
+            DagacsSpace.lg,
+            DagacsSpace.sm,
+            DagacsSpace.lg,
+            DagacsSpace.sm,
+          ),
+          child: compact ? _buildCompactSearchRow() : _buildDesktopSearchBar(),
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactSearchRow() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _searchField()),
+        const SizedBox(width: DagacsSpace.sm),
+        OutlinedButton.icon(
+          key: const Key('student-filters-button'),
+          onPressed: _openFilterDialog,
+          icon: const Icon(Icons.filter_list),
+          label: const Text('Filters'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopSearchBar() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 1080),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _searchField(),
+          const SizedBox(height: DagacsSpace.sm),
+          Wrap(
+            spacing: DagacsSpace.sm,
+            runSpacing: DagacsSpace.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _intFilterField(
+                key: const Key('filter-academic-session'),
+                label: 'Academic Session',
+                value: _academicSessionId,
+                options: _filterOptions.academicSessions,
+                onChanged: _onAcademicSessionChanged,
+              ),
+              _intFilterField(
+                key: const Key('filter-program'),
+                label: 'Program',
+                value: _programId,
+                options: _filterOptions.programs,
+                onChanged: _onProgramChanged,
+              ),
+              _intFilterField(
+                key: const Key('filter-semester'),
+                label: 'Semester',
+                value: _semesterId,
+                options: _filterOptions.semesters,
+                onChanged: _onSemesterChanged,
+              ),
+              _intFilterField(
+                key: const Key('filter-batch'),
+                label: 'Batch',
+                value: _batchId,
+                options: _filterOptions.batches,
+                onChanged: _onBatchChanged,
+              ),
+              _intFilterField(
+                key: const Key('filter-section'),
+                label: 'Section',
+                value: _sectionId,
+                options: _filterOptions.sections,
+                onChanged: _onSectionChanged,
+              ),
+              SizedBox(
+                width: 170,
+                child: AppFormDropdown<String?>(
+                  key: const Key('filter-status'),
+                  label: 'Status',
+                  value: _status,
+                  items: const [
+                    DropdownMenuItem<String?>(value: null, child: Text('All')),
+                    DropdownMenuItem<String?>(
+                        value: 'ACTIVE', child: Text('ACTIVE')),
+                    DropdownMenuItem<String?>(
+                        value: 'INACTIVE', child: Text('INACTIVE')),
+                  ],
+                  onChanged: _onStatusChanged,
+                ),
+              ),
+              SizedBox(
+                width: 200,
+                child: AppFormDropdown<String?>(
+                  key: const Key('filter-login-status'),
+                  label: 'Login Status',
+                  value: _loginStatus,
+                  items: const [
+                    DropdownMenuItem<String?>(value: null, child: Text('All')),
+                    DropdownMenuItem<String?>(
+                        value: 'ACTIVE', child: Text('LOGIN ACTIVE')),
+                    DropdownMenuItem<String?>(
+                        value: 'NONE', child: Text('NO LOGIN')),
+                  ],
+                  onChanged: _onLoginStatusChanged,
+                ),
+              ),
+              if (_hasActiveFilters)
+                TextButton.icon(
+                  key: const Key('clear-filters'),
+                  onPressed: _clearFilters,
+                  icon: const Icon(Icons.filter_alt_off),
+                  label: const Text('Clear Filters'),
+                ),
+            ],
+          ),
+        ],
       ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: TextField(
-          key: const Key('student-search'),
-          controller: _searchController,
-          onChanged: (value) => setState(() => _searchQuery = value),
-          decoration: InputDecoration(
-            hintText: 'Search by name, roll number, or enrollment number',
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: _searchQuery.isEmpty
-                ? null
-                : IconButton(
-                    key: const Key('student-search-clear'),
-                    tooltip: 'Clear search',
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                  ),
-            filled: true,
-            fillColor: DagacsColors.surfaceAlt,
-            border: const OutlineInputBorder(
-              borderSide: BorderSide.none,
-              borderRadius: BorderRadius.all(Radius.circular(DagacsRadius.md)),
-            ),
-            enabledBorder: const OutlineInputBorder(
-              borderSide: BorderSide.none,
-              borderRadius:
-                  BorderRadius.all(Radius.circular(DagacsRadius.md)),
-            ),
+    );
+  }
+
+  /// One master-data filter dropdown (id-based) with a leading "All" entry.
+  Widget _intFilterField({
+    required Key key,
+    required String label,
+    required int? value,
+    required List<StudentFilterOption> options,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return SizedBox(
+      width: 200,
+      child: AppFormDropdown<int?>(
+        key: key,
+        label: label,
+        value: value,
+        items: [
+          const DropdownMenuItem<int?>(value: null, child: Text('All')),
+          ...options.map((o) => DropdownMenuItem<int?>(
+              value: o.id,
+              child: Text(o.displayName, overflow: TextOverflow.ellipsis))),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _searchField() {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 720),
+      child: TextField(
+        key: const Key('student-search'),
+        controller: _searchController,
+        onChanged: _onSearchChanged,
+        decoration: InputDecoration(
+          hintText: 'Search by name, roll number, or enrollment number',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  key: const Key('student-search-clear'),
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    _onSearchChanged('');
+                  },
+                ),
+          filled: true,
+          fillColor: DagacsColors.surfaceAlt,
+          border: const OutlineInputBorder(
+            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.all(Radius.circular(DagacsRadius.md)),
+          ),
+          enabledBorder: const OutlineInputBorder(
+            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.all(Radius.circular(DagacsRadius.md)),
           ),
         ),
       ),
     );
   }
 
+  Widget _buildPagination() {
+    final page = _page;
+    if (page.totalPages <= 1) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          DagacsSpace.lg, 0, DagacsSpace.lg, DagacsSpace.sm),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            key: const Key('students-prev-page'),
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Previous page',
+            onPressed:
+                page.page > 0 && !_loading ? () => _goToPage(page.page - 1) : null,
+          ),
+          Text('Page ${page.page + 1} of ${page.totalPages}'),
+          IconButton(
+            key: const Key('students-next-page'),
+            icon: const Icon(Icons.chevron_right),
+            tooltip: 'Next page',
+            onPressed:
+                page.hasMore && !_loading ? () => _goToPage(page.page + 1) : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStudentList() {
-    final visible = _visibleStudents;
-    if (visible.isEmpty) {
-      return const AppEmptyState(
-        icon: Icons.search_off,
-        message: 'No students match',
-      );
-    }
+    final students = _page.content;
     return ListView.builder(
       key: const Key('student-list'),
       padding: EdgeInsets.fromLTRB(
@@ -448,9 +812,9 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
         DagacsSpace.lg,
         96,
       ),
-      itemCount: visible.length,
+      itemCount: students.length,
       itemBuilder: (context, index) {
-        final student = visible[index];
+        final student = students[index];
         final hasLogin = student.hasLogin;
         return Padding(
           padding: const EdgeInsets.only(bottom: DagacsSpace.sm + 2),
@@ -479,6 +843,8 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                       Text(
                         '${student.enrollmentNumber ?? '-'} · '
                         '${student.programName ?? '-'} · '
+                        '${student.academicSessionName ?? '-'} · '
+                        '${student.semesterName ?? '-'} · '
                         '${student.batchName ?? '-'} · '
                         '${student.sectionName ?? '-'}',
                         maxLines: 2,
@@ -499,11 +865,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
                     ),
                     const SizedBox(height: 4),
                     AppStatusBadge(
-                      label: hasLogin
-                          ? (student.loginIsActive
-                              ? 'LOGIN ACTIVE'
-                              : 'LOGIN INACTIVE')
-                          : 'NO LOGIN',
+                      label: student.loginStatusLabel,
                       active: hasLogin && student.loginIsActive,
                     ),
                     if (student.mustChangePassword == true) ...[
@@ -522,6 +884,279 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Immutable snapshot of the filter selection produced by the narrow-screen
+/// filter dialog.
+class _StudentFilterSelection {
+  const _StudentFilterSelection({
+    this.academicSessionId,
+    this.programId,
+    this.semesterId,
+    this.batchId,
+    this.sectionId,
+    this.status,
+    this.loginStatus,
+  });
+
+  final int? academicSessionId;
+  final int? programId;
+  final int? semesterId;
+  final int? batchId;
+  final int? sectionId;
+  final String? status;
+  final String? loginStatus;
+}
+
+/// Narrow-screen filters dialog/bottom-sheet. Holds LOCAL selection state and,
+/// whenever an upstream field changes, re-fetches the master-data filter
+/// options for the new selection so the dependency chain
+/// (Academic Session -> Program -> Semester -> Batch -> Section) keeps working
+/// inside the dialog exactly like the desktop bar. Apply returns the chosen
+/// values; Clear resets all of them.
+class _StudentFiltersDialog extends StatefulWidget {
+  const _StudentFiltersDialog({
+    required this.repository,
+    required this.options,
+    this.academicSessionId,
+    this.programId,
+    this.semesterId,
+    this.batchId,
+    this.sectionId,
+    this.status,
+    this.loginStatus,
+  });
+
+  final StudentManagementRepository repository;
+  final StudentFilterOptionsData options;
+  final int? academicSessionId;
+  final int? programId;
+  final int? semesterId;
+  final int? batchId;
+  final int? sectionId;
+  final String? status;
+  final String? loginStatus;
+
+  @override
+  State<_StudentFiltersDialog> createState() => _StudentFiltersDialogState();
+}
+
+class _StudentFiltersDialogState extends State<_StudentFiltersDialog> {
+  late int? _academicSessionId = widget.academicSessionId;
+  late int? _programId = widget.programId;
+  late int? _semesterId = widget.semesterId;
+  late int? _batchId = widget.batchId;
+  late int? _sectionId = widget.sectionId;
+  late String? _status = widget.status;
+  late String? _loginStatus = widget.loginStatus;
+  late StudentFilterOptionsData _options = widget.options;
+  int _seq = 0;
+
+  Future<void> _rescope() async {
+    final seq = ++_seq;
+    try {
+      final options = await widget.repository.getFilterOptions(
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        semesterId: _semesterId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+      );
+      if (!mounted || seq != _seq) return;
+      setState(() => _options = options);
+    } on ApiException {
+      // Keep the current options; the user can still apply what they picked.
+    } catch (_) {
+      // Same as above - best-effort re-scoping only.
+    }
+  }
+
+  void _onSession(int? value) {
+    setState(() {
+      _academicSessionId = value;
+      _programId = null;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _rescope();
+  }
+
+  void _onProgram(int? value) {
+    setState(() {
+      _programId = value;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _rescope();
+  }
+
+  void _onSemester(int? value) {
+    setState(() {
+      _semesterId = value;
+      _batchId = null;
+      _sectionId = null;
+    });
+    _rescope();
+  }
+
+  void _onBatch(int? value) {
+    setState(() {
+      _batchId = value;
+      _sectionId = null;
+    });
+    _rescope();
+  }
+
+  void _onSection(int? value) {
+    setState(() => _sectionId = value);
+    _rescope();
+  }
+
+  void _clear() {
+    setState(() {
+      _academicSessionId = null;
+      _programId = null;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+      _status = null;
+      _loginStatus = null;
+    });
+    _rescope();
+  }
+
+  void _apply() {
+    Navigator.of(context).pop(_StudentFilterSelection(
+      academicSessionId: _academicSessionId,
+      programId: _programId,
+      semesterId: _semesterId,
+      batchId: _batchId,
+      sectionId: _sectionId,
+      status: _status,
+      loginStatus: _loginStatus,
+    ));
+  }
+
+  Widget _intField({
+    required Key key,
+    required String label,
+    required int? value,
+    required List<StudentFilterOption> options,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return AppFormDropdown<int?>(
+      key: key,
+      label: label,
+      value: value,
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text('All')),
+        ...options.map((o) => DropdownMenuItem<int?>(
+            value: o.id, child: Text(o.displayName))),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogFrame(
+      width: 460,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Filter Students',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              IconButton(
+                key: const Key('filter-dialog-clear'),
+                tooltip: 'Clear filters',
+                onPressed: _clear,
+                icon: const Icon(Icons.filter_alt_off),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _intField(
+            key: const Key('filter-academic-session'),
+            label: 'Academic Session',
+            value: _academicSessionId,
+            options: _options.academicSessions,
+            onChanged: _onSession,
+          ),
+          _intField(
+            key: const Key('filter-program'),
+            label: 'Program',
+            value: _programId,
+            options: _options.programs,
+            onChanged: _onProgram,
+          ),
+          _intField(
+            key: const Key('filter-semester'),
+            label: 'Semester',
+            value: _semesterId,
+            options: _options.semesters,
+            onChanged: _onSemester,
+          ),
+          _intField(
+            key: const Key('filter-batch'),
+            label: 'Batch',
+            value: _batchId,
+            options: _options.batches,
+            onChanged: _onBatch,
+          ),
+          _intField(
+            key: const Key('filter-section'),
+            label: 'Section',
+            value: _sectionId,
+            options: _options.sections,
+            onChanged: _onSection,
+          ),
+          AppFormDropdown<String?>(
+            key: const Key('filter-status'),
+            label: 'Status',
+            value: _status,
+            items: const [
+              DropdownMenuItem<String?>(value: null, child: Text('All')),
+              DropdownMenuItem<String?>(
+                  value: 'ACTIVE', child: Text('ACTIVE')),
+              DropdownMenuItem<String?>(
+                  value: 'INACTIVE', child: Text('INACTIVE')),
+            ],
+            onChanged: (v) => setState(() => _status = v),
+          ),
+          AppFormDropdown<String?>(
+            key: const Key('filter-login-status'),
+            label: 'Login Status',
+            value: _loginStatus,
+            items: const [
+              DropdownMenuItem<String?>(value: null, child: Text('All')),
+              DropdownMenuItem<String?>(
+                  value: 'ACTIVE', child: Text('LOGIN ACTIVE')),
+              DropdownMenuItem<String?>(
+                  value: 'NONE', child: Text('NO LOGIN')),
+            ],
+            onChanged: (v) => setState(() => _loginStatus = v),
+          ),
+          const SizedBox(height: 8),
+          AppFormActions(
+            onCancel: () => Navigator.of(context).pop(),
+            onSubmit: _apply,
+            submitting: false,
+            submitKey: 'filter-dialog-apply',
+            submitLabel: 'Apply Filters',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -937,34 +1572,43 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
   int? _programId;
   int? _batchId;
   int? _sectionId;
+  int? _academicSessionId;
+  int? _semesterId;
   String? _status;
 
   bool _loadingReferences = true;
+  bool _loadingSemesters = false;
   String? _referencesError;
   bool _submitting = false;
   String? _submitError;
 
+  List<AcademicSession> _academicSessions = const [];
   List<Program> _programs = const [];
   List<Batch> _batches = const [];
   List<Section> _sections = const [];
+  List<Semester> _semesters = const [];
 
   TextEditingController _controller(String? value) =>
       TextEditingController(text: value ?? '');
 
   bool get _isEdit => widget.initial != null;
 
-  /// Batches whose legacy program-name snapshot matches the selected program.
+  /// Batches belonging to the selected academic session whose legacy
+  /// program-name snapshot matches the selected program.
   ///
   /// Note: `BatchDTO` exposes only the legacy `program` name string, not a
   /// relational program id, so client-side filtering relies on that snapshot.
   /// The backend remains authoritative via Batch -> AcademicSession -> Program.
-  List<Batch> _batchesForProgram(int? programId) {
+  List<Batch> _batchesFor(int? sessionId, int? programId) {
+    final sessionBatches = sessionId == null
+        ? _batches.where((b) => b.academicSessionId == null).toList()
+        : _batches.where((b) => b.academicSessionId == sessionId).toList();
     final programName = _programs
         .where((p) => p.id == programId)
         .map((p) => p.name)
         .firstOrNull;
-    if (programName == null) return const [];
-    return _batches.where((b) => b.program == programName).toList();
+    if (programName == null) return sessionBatches;
+    return sessionBatches.where((b) => b.program == programName).toList();
   }
 
   List<Section> _sectionsForBatch(int? batchId) {
@@ -974,8 +1618,8 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
 
   /// Keeps the edit-mode pre-selection only when it belongs to the selected
   /// program; otherwise falls back to the first consistent batch.
-  int? _resolveBatchId(int? preferred, int? programId) {
-    final matches = _batchesForProgram(programId);
+  int? _resolveBatchId(int? preferred, int? sessionId, int? programId) {
+    final matches = _batchesFor(sessionId, programId);
     if (preferred != null && matches.any((b) => b.id == preferred)) {
       return preferred;
     }
@@ -1021,19 +1665,25 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
       _referencesError = null;
     });
     try {
+      final sessions = await widget.masterDataRepository.getAcademicSessions();
       final programs = await widget.masterDataRepository.getPrograms();
       final batches = await widget.masterDataRepository.getBatches();
       final sections = await widget.masterDataRepository.getSections();
       if (!mounted) return;
       setState(() {
+        _academicSessions = sessions;
         _programs = programs;
         _batches = batches;
         _sections = sections;
+        _academicSessionId =
+            widget.initial?.academicSessionId ?? sessions.firstOrNull?.id;
         _programId = widget.initial?.programId ?? programs.firstOrNull?.id;
-        _batchId = _resolveBatchId(widget.initial?.batchId, _programId);
+        _batchId =
+            _resolveBatchId(widget.initial?.batchId, _academicSessionId, _programId);
         _sectionId = _resolveSectionId(widget.initial?.sectionId, _batchId);
         _loadingReferences = false;
       });
+      await _loadSemesters(_academicSessionId);
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -1051,6 +1701,41 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
     }
   }
 
+  Future<void> _loadSemesters(int? sessionId) async {
+    if (sessionId == null) {
+      if (!mounted) return;
+      setState(() {
+        _semesters = const [];
+        _semesterId = null;
+        _loadingSemesters = false;
+      });
+      return;
+    }
+    setState(() => _loadingSemesters = true);
+    List<Semester> semesters;
+    try {
+      semesters = await widget.masterDataRepository.getSemestersBySession(sessionId);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _semesters = const [];
+        _semesterId = null;
+        _loadingSemesters = false;
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      var keep = widget.initial?.semesterId;
+      if (keep != null && !semesters.any((s) => s.id == keep)) {
+        keep = null;
+      }
+      _semesters = semesters;
+      _semesterId = keep;
+      _loadingSemesters = false;
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final request = StudentManagementRequest(
@@ -1066,8 +1751,10 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
       admissionDate: _admissionDate.text.trim(),
       status: _status,
       programId: _programId,
+      academicSessionId: _academicSessionId,
       batchId: _batchId,
       sectionId: _sectionId,
+      semesterId: _semesterId,
     );
 
     setState(() {
@@ -1197,6 +1884,28 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
                 (v == null || v.isEmpty) ? 'Gender is required' : null,
           ),
           AppFormDropdown<int>(
+            key: const Key('field-academic-session'),
+            label: 'Academic Session',
+            value: _academicSessionId,
+            items: _academicSessions
+                .where((s) => s.id != null)
+                .map((s) => DropdownMenuItem(
+                    value: s.id,
+                    child: Text(s.name ?? s.code ?? 'Unknown')))
+                .toList(),
+            onChanged: (v) {
+              setState(() {
+                _academicSessionId = v;
+                _programId = null;
+                _batchId = null;
+                _sectionId = null;
+                _semesterId = null;
+              });
+              _loadSemesters(v);
+            },
+            validator: (v) => v == null ? 'Academic Session is required' : null,
+          ),
+          AppFormDropdown<int>(
             key: const Key('field-program'),
             label: 'Program',
             value: _programId,
@@ -1207,16 +1916,35 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
                 .toList(),
             onChanged: (v) => setState(() {
               _programId = v;
-              _batchId = _batchesForProgram(v).firstOrNull?.id;
+              _batchId = _batchesFor(_academicSessionId, v).firstOrNull?.id;
               _sectionId = _sectionsForBatch(_batchId).firstOrNull?.id;
             }),
             validator: (v) => v == null ? 'Program is required' : null,
           ),
+          if (_loadingSemesters)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_semesters.isNotEmpty)
+            AppFormDropdown<int>(
+              key: const Key('field-semester'),
+              label: 'Semester',
+              value: _semesterId,
+              items: _semesters
+                  .where((s) => s.id != null)
+                  .map((s) => DropdownMenuItem(
+                      value: s.id,
+                      child: Text('${s.name ?? ''} '
+                          '${s.code ?? ''}'.trim())))
+                  .toList(),
+              onChanged: (v) => setState(() => _semesterId = v),
+            ),
           AppFormDropdown<int>(
             key: const Key('field-batch'),
             label: 'Batch',
             value: _batchId,
-            items: _batchesForProgram(_programId)
+            items: _batchesFor(_academicSessionId, _programId)
                 .where((b) => b.id != null)
                 .map((b) => DropdownMenuItem(
                     value: b.id, child: Text(b.name ?? 'Unknown')))

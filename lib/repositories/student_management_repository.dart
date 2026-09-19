@@ -15,19 +15,57 @@ class StudentManagementRepository {
 
   final ApiClient _client;
 
-  Future<List<StudentManagement>> getStudents() async {
+  /// Server-side searched/paged student list (backend `StudentPageResponse`).
+  ///
+  /// Only the explicitly selected ids in [query] are applied - the backend
+  /// never re-applies any cascade. `page` and `size` default inside [query].
+  Future<StudentPage> searchStudents(StudentSearchQuery query) async {
     try {
-      final data = await _client.get('/admin/students');
-      if (data is! List) {
+      final end = _queryString(query.toQueryParameters());
+      final data = await _client.get('/admin/students$end');
+      if (data is! Map) {
         throw const ApiException.serverError();
       }
-      return data
-          .whereType<Map>()
-          .map((e) => StudentManagement.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+      return StudentPage.fromJson(Map<String, dynamic>.from(data));
     } on ApiException {
       rethrow;
     }
+  }
+
+  /// Cascaded academic filter options (backend `StudentFilterOptionsResponse`).
+  ///
+  /// The lists are master-data sourced (never student records) so they stay
+  /// available even with zero matching students. Pass the currently selected
+  /// ids to scope each list to the "consistent academic context".
+  Future<StudentFilterOptionsData> getFilterOptions({
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? batchId,
+    int? sectionId,
+  }) async {
+    try {
+      final end = _queryString({
+        if (academicSessionId != null) 'academicSessionId': academicSessionId,
+        if (programId != null) 'programId': programId,
+        if (semesterId != null) 'semesterId': semesterId,
+        if (batchId != null) 'batchId': batchId,
+        if (sectionId != null) 'sectionId': sectionId,
+      });
+      final data = await _client.get('/admin/students/filter-options$end');
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentFilterOptionsData.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  static String _queryString(Map<String, dynamic> params) {
+    if (params.isEmpty) return '';
+    final mapped = params.map((k, v) => MapEntry(k, '$v'));
+    return '?${Uri(queryParameters: mapped).query}';
   }
 
   Future<StudentManagement> getStudent(int id) async {

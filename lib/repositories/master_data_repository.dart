@@ -33,6 +33,11 @@ class MasterDataRepository {
   Future<List<Semester>> getSemesters() =>
       _list('/admin/semesters', Semester.fromJson);
 
+  /// Semesters belonging to one academic session (used by the student form so
+  /// the semester dropdown only offers the selected session's semesters).
+  Future<List<Semester>> getSemestersBySession(int sessionId) =>
+      _list('/admin/academic-sessions/$sessionId/semesters', Semester.fromJson);
+
   Future<List<Batch>> getBatches() => _list('/admin/batches', Batch.fromJson);
 
   Future<List<Section>> getSections() =>
