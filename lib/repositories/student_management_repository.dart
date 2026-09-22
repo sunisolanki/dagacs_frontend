@@ -228,4 +228,27 @@ class StudentManagementRepository {
       rethrow;
     }
   }
+
+  /// Previews and validates an import file without persisting anything (M9.10,
+  /// ADMIN-only). Returns a [StudentImportResult] with validation errors but
+  /// zero DB changes. Call this before [importStudents] to show a preview.
+  Future<StudentImportResult> previewImport({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    try {
+      final data = await _client.postMultipart(
+        '/admin/students/import/preview',
+        field: 'file',
+        filename: filename,
+        bytes: bytes,
+      );
+      if (data is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentImportResult.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
 }

@@ -2038,11 +2038,14 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   bool _submitting = false;
   String? _error;
   StudentImportResult? _result;
+  StudentImportResult? _previewResult;
+  bool _previewing = false;
 
   Future<void> _chooseFile() async {
     setState(() {
       _error = null;
       _result = null;
+      _previewResult = null;
     });
     try {
       final picked = await widget.pickFile();
@@ -2054,12 +2057,46 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
     }
   }
 
+  Future<void> _preview() async {
+    final file = _file;
+    if (file == null) return;
+    setState(() {
+      _previewing = true;
+      _error = null;
+      _previewResult = null;
+    });
+    try {
+      final result = await widget.repository.previewImport(
+        filename: file.name,
+        bytes: file.bytes,
+      );
+      if (!mounted) return;
+      setState(() {
+        _previewing = false;
+        _previewResult = result;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _previewing = false;
+        _error = _importErrorFor(e);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _previewing = false;
+        _error = 'Could not preview the file. Please try again.';
+      });
+    }
+  }
+
   Future<void> _import() async {
     final file = _file;
     if (file == null) return;
     setState(() {
       _submitting = true;
       _error = null;
+      _result = null;
     });
     try {
       final result = await widget.repository.importStudents(
@@ -2070,6 +2107,7 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
       setState(() {
         _submitting = false;
         _result = result;
+        _previewResult = null;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -2102,6 +2140,8 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
     }
   }
 
+  bool get _allRowsValid => _previewResult != null && _previewResult!.isSuccess;
+
   @override
   Widget build(BuildContext context) {
     return AppDialogFrame(
@@ -2122,11 +2162,10 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
         const SizedBox(height: 8),
         Text(
           'Upload an Excel (.xlsx) or CSV (.csv) file with the columns: '
-          'Roll Number, Email, Name, Gender, Father Name, Mother Name, '
-          'Photo URL, Enrollment Number, Age, Admission Date, Status, '
-          'Program ID, Batch ID, Section ID (leave Section ID blank for a '
-          'batch that has no sections). Import is all-or-nothing: if '
-          'any row is invalid, no students are added.',
+          'Name, Roll Number, Academic Session, Program (required). '
+          'Semester, Batch, Section (optional). '
+          'Enrollment Number is derived from Roll Number if absent. '
+          'Import is all-or-nothing: if any row is invalid, no students are added.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 16),
@@ -2143,6 +2182,38 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
             key: const Key('import-file-name'),
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          const SizedBox(height: 8),
+          if (_previewResult == null && !_previewing) ...[
+            ElevatedButton.icon(
+              key: const Key('preview-import'),
+              onPressed: _previewing ? null : _preview,
+              icon: const Icon(Icons.visibility),
+              label: const Text('Preview & Validate'),
+            ),
+          ],
+          if (_previewing) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: CircularProgressIndicator(),
+            ),
+          ],
+          if (_previewResult != null && !_previewResult!.isSuccess) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${_previewResult!.totalRows} rows detected. '
+              '${_previewResult!.rejectedRows} invalid.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+            const SizedBox(height: 4),
+            ..._previewResult!.errors.map((e) => _buildErrorRow(e, 0)),
+          ],
+          if (_previewResult != null && _previewResult!.isSuccess) ...[
+            const SizedBox(height: 8),
+            Text(
+              'All ${_previewResult!.totalRows} rows are valid.',
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
+          ],
         ],
         if (_error != null) ...[
           const SizedBox(height: 12),
@@ -2163,7 +2234,7 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
             const SizedBox(width: DagacsSpace.sm),
             ElevatedButton(
               key: const Key('submit-import'),
-              onPressed: _submitting || !hasFile ? null : _import,
+              onPressed: _submitting || !hasFile || !_allRowsValid ? null : _import,
               child: _submitting
                   ? const SizedBox(
                       width: 18,
