@@ -511,6 +511,7 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
       context: context,
       builder: (_) => _StudentImportDialog(
         repository: widget.repository,
+        masterDataRepository: widget.masterDataRepository,
         pickFile: widget.pickImportFile ?? _pickImportFileDefault,
       ),
     );
@@ -2023,10 +2024,12 @@ class _StudentFormDialogState extends State<_StudentFormDialog> {
 class _StudentImportDialog extends StatefulWidget {
   const _StudentImportDialog({
     required this.repository,
+    required this.masterDataRepository,
     required this.pickFile,
   });
 
   final StudentManagementRepository repository;
+  final MasterDataRepository masterDataRepository;
   final Future<PickedImportFile?> Function() pickFile;
 
   @override
@@ -2040,6 +2043,179 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   StudentImportResult? _result;
   StudentImportResult? _previewResult;
   bool _previewing = false;
+  int? _academicSessionId;
+  int? _programId;
+  int? _batchId;
+  int? _sectionId;
+  int? _semesterId;
+  List<AcademicSession> _academicSessions = const [];
+  List<StudentFilterOption> _programs = const [];
+  List<Semester> _semesters = const [];
+  List<Batch> _batches = const [];
+  List<Section> _sections = const [];
+  bool _loadingAcademicSessions = false;
+  bool _loadingPrograms = false;
+  bool _loadingSemesters = false;
+  bool _loadingBatches = false;
+  bool _loadingSections = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAcademicSessions();
+  }
+
+  Future<void> _loadAcademicSessions() async {
+    setState(() => _loadingAcademicSessions = true);
+    try {
+      final sessions = await widget.masterDataRepository.getAcademicSessions();
+      if (!mounted) return;
+      setState(() {
+        _academicSessions = sessions;
+        _loadingAcademicSessions = false;
+      });
+      if (_academicSessionId != null) {
+        await _loadPrograms();
+        await _loadSemesters();
+        await _loadBatches();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingAcademicSessions = false);
+    }
+  }
+
+  Future<void> _loadPrograms() async {
+    if (_academicSessionId == null) return;
+    setState(() => _loadingPrograms = true);
+    try {
+      final options = await widget.repository.getFilterOptions(
+        academicSessionId: _academicSessionId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _programs = options.programs.toList();
+        _loadingPrograms = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingPrograms = false);
+    }
+  }
+
+  Future<void> _loadSemesters() async {
+    if (_academicSessionId == null) return;
+    setState(() => _loadingSemesters = true);
+    try {
+      final semesters = await widget.masterDataRepository.getSemestersBySession(_academicSessionId!);
+      if (!mounted) return;
+      setState(() {
+        _semesters = semesters;
+        _loadingSemesters = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSemesters = false);
+    }
+  }
+
+  Future<void> _loadBatches() async {
+    if (_academicSessionId == null) return;
+    setState(() => _loadingBatches = true);
+    try {
+      final batches = await widget.masterDataRepository.getBatches();
+      if (!mounted) return;
+      final programName = _programId == null
+          ? null
+          : _programs
+              .where((p) => p.id == _programId)
+              .map((p) => p.name)
+              .firstOrNull;
+      final filtered = batches
+          .where((b) => b.academicSessionId == _academicSessionId)
+          .where((b) =>
+              programName == null || b.program == null || b.program == programName)
+          .toList();
+      setState(() {
+        _batches = filtered;
+        _loadingBatches = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingBatches = false);
+    }
+  }
+
+  Future<void> _loadSections() async {
+    if (_batchId == null) return;
+    setState(() => _loadingSections = true);
+    try {
+      final sections = await widget.masterDataRepository.getSections();
+      if (!mounted) return;
+      final filtered = sections.where((s) => s.batchId == _batchId).toList();
+      setState(() {
+        _sections = filtered;
+        _loadingSections = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSections = false);
+    }
+  }
+
+  void _resetAcademicContext() {
+    setState(() {
+      _programId = null;
+      _semesterId = null;
+      _batchId = null;
+      _sectionId = null;
+      _programs = const [];
+      _semesters = const [];
+      _batches = const [];
+      _sections = const [];
+    });
+  }
+
+  void _onSessionChanged(int? sessionId) {
+    setState(() {
+      _academicSessionId = sessionId;
+    });
+    _resetAcademicContext();
+    _loadPrograms();
+    _loadSemesters();
+    _loadBatches();
+  }
+
+  void _onProgramChanged(int? programId) {
+    setState(() {
+      _programId = programId;
+      _batchId = null;
+      _sectionId = null;
+      _batches = const [];
+      _sections = const [];
+    });
+    _loadBatches();
+  }
+
+  void _onSemesterChanged(int? semesterId) {
+    setState(() {
+      _semesterId = semesterId;
+    });
+    _loadBatches();
+  }
+
+  void _onBatchChanged(int? batchId) {
+    setState(() {
+      _batchId = batchId;
+    });
+    _loadSections();
+  }
+
+  void _onSectionChanged(int? sectionId) {
+    setState(() {
+      _sectionId = sectionId;
+    });
+  }
 
   Future<void> _chooseFile() async {
     setState(() {
@@ -2060,6 +2236,10 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   Future<void> _preview() async {
     final file = _file;
     if (file == null) return;
+    if (_academicSessionId == null || _programId == null || _batchId == null || _sectionId == null || _semesterId == null) {
+      setState(() => _error = 'Please select all academic context values (Session, Program, Semester, Batch, Section).');
+      return;
+    }
     setState(() {
       _previewing = true;
       _error = null;
@@ -2069,6 +2249,11 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
       final result = await widget.repository.previewImport(
         filename: file.name,
         bytes: file.bytes,
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+        semesterId: _semesterId,
       );
       if (!mounted) return;
       setState(() {
@@ -2093,6 +2278,10 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   Future<void> _import() async {
     final file = _file;
     if (file == null) return;
+    if (_academicSessionId == null || _programId == null || _batchId == null || _sectionId == null || _semesterId == null) {
+      setState(() => _error = 'Please select all academic context values (Session, Program, Semester, Batch, Section).');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -2102,6 +2291,11 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
       final result = await widget.repository.importStudents(
         filename: file.name,
         bytes: file.bytes,
+        academicSessionId: _academicSessionId,
+        programId: _programId,
+        batchId: _batchId,
+        sectionId: _sectionId,
+        semesterId: _semesterId,
       );
       if (!mounted) return;
       setState(() {
@@ -2161,13 +2355,13 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
         Text('Import Students', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 8),
         Text(
-          'Upload an Excel (.xlsx) or CSV (.csv) file with the columns: '
-          'Name, Roll Number, Academic Session, Program (required). '
-          'Semester, Batch, Section (optional). '
-          'Enrollment Number is derived from Roll Number if absent. '
+          'Select academic context above, then upload an Excel (.xlsx) or CSV (.csv) file '
+          'with Name and Roll Number columns. '
           'Import is all-or-nothing: if any row is invalid, no students are added.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        const SizedBox(height: 16),
+        _buildAcademicContextDropdown(),
         const SizedBox(height: 16),
         OutlinedButton.icon(
           key: const Key('pick-import-file'),
@@ -2249,6 +2443,113 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildAcademicContextDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown<AcademicSession>(
+                label: 'Academic Session',
+                items: _academicSessions,
+                value: _academicSessionId,
+                loading: _loadingAcademicSessions,
+                onChanged: _onSessionChanged,
+                itemLabel: (s) => s.name ?? '',
+                itemValue: (s) => s.id,
+              ),
+            ),
+            const SizedBox(width: 8),
+        Expanded(
+          child: _buildDropdown<StudentFilterOption>(
+            label: 'Program',
+            items: _programs,
+            value: _programId,
+            loading: _loadingPrograms,
+            onChanged: _onProgramChanged,
+            itemLabel: (o) => o.name ?? '',
+            itemValue: (o) => o.id,
+          ),
+        ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown<Semester>(
+                label: 'Semester',
+                items: _semesters,
+                value: _semesterId,
+                loading: _loadingSemesters,
+                onChanged: _onSemesterChanged,
+                itemLabel: (s) => s.name ?? '',
+                itemValue: (s) => s.id,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown<Batch>(
+                label: 'Batch',
+                items: _batches,
+                value: _batchId,
+                loading: _loadingBatches,
+                onChanged: _onBatchChanged,
+                itemLabel: (b) => b.name ?? '',
+                itemValue: (b) => b.id,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildDropdown<Section>(
+                label: 'Section',
+                items: _sections,
+                value: _sectionId,
+                loading: _loadingSections,
+                onChanged: _onSectionChanged,
+                itemLabel: (s) => s.name ?? '',
+                itemValue: (s) => s.id,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String label,
+    required List<T> items,
+    required int? value,
+    required bool loading,
+    required void Function(int?) onChanged,
+    required String Function(T) itemLabel,
+    required int? Function(T) itemValue,
+  }) {
+    return DropdownButtonFormField<int>(
+      decoration: InputDecoration(
+        labelText: label,
+        contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      value: value,
+      items: loading
+          ? [const DropdownMenuItem(child: CircularProgressIndicator())]
+          : items.map((item) {
+              return DropdownMenuItem<int>(
+                value: itemValue(item),
+                child: Text(itemLabel(item)),
+              );
+            }).toList(),
+      onChanged: onChanged,
+      isExpanded: true,
+      validator: (v) => v == null ? '$label is required' : null,
     );
   }
 

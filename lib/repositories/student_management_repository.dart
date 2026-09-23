@@ -212,13 +212,25 @@ class StudentManagementRepository {
   Future<StudentImportResult> importStudents({
     required String filename,
     required List<int> bytes,
+    int? academicSessionId,
+    int? programId,
+    int? batchId,
+    int? sectionId,
+    int? semesterId,
   }) async {
+    final params = <String, dynamic>{};
+    if (academicSessionId != null) params['academicSessionId'] = academicSessionId;
+    if (programId != null) params['programId'] = programId;
+    if (batchId != null) params['batchId'] = batchId;
+    if (sectionId != null) params['sectionId'] = sectionId;
+    if (semesterId != null) params['semesterId'] = semesterId;
     try {
       final data = await _client.postMultipart(
         '/admin/students/import',
         field: 'file',
         filename: filename,
         bytes: bytes,
+        params: params,
       );
       if (data is! Map) {
         throw const ApiException.serverError();
@@ -235,13 +247,25 @@ class StudentManagementRepository {
   Future<StudentImportResult> previewImport({
     required String filename,
     required List<int> bytes,
+    int? academicSessionId,
+    int? programId,
+    int? batchId,
+    int? sectionId,
+    int? semesterId,
   }) async {
+    final params = <String, dynamic>{};
+    if (academicSessionId != null) params['academicSessionId'] = academicSessionId;
+    if (programId != null) params['programId'] = programId;
+    if (batchId != null) params['batchId'] = batchId;
+    if (sectionId != null) params['sectionId'] = sectionId;
+    if (semesterId != null) params['semesterId'] = semesterId;
     try {
       final data = await _client.postMultipart(
         '/admin/students/import/preview',
         field: 'file',
         filename: filename,
         bytes: bytes,
+        params: params,
       );
       if (data is! Map) {
         throw const ApiException.serverError();

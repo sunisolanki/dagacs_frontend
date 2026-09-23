@@ -191,8 +191,12 @@ class ApiClient {
     required String field,
     required String filename,
     required List<int> bytes,
+    Map<String, dynamic>? params,
   }) async {
-    final uri = Uri.parse('$_base$path');
+    final uri = Uri.parse('$_base$path').replace(
+        queryParameters: params != null && params.isNotEmpty
+            ? {...params.map((k, v) => MapEntry(k, v.toString()))}
+            : {});
 
     http.Response response;
     try {

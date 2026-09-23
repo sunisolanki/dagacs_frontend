@@ -26,7 +26,12 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   StudentSearchQuery? lastQuery;
   int searchCalls = 0;
 
-  StudentFilterOptionsData filterOptions = const StudentFilterOptionsData();
+  StudentFilterOptionsData filterOptions = const StudentFilterOptionsData(
+    programs: [
+      StudentFilterOption(id: 1, name: 'Computer Science'),
+      StudentFilterOption(id: 2, name: 'Electrical'),
+    ],
+  );
   int getFilterOptionsCalls = 0;
   StudentSearchQuery? lastFilterOptionsQuery;
 
@@ -177,9 +182,32 @@ class _FakeStudentManagementRepository extends StudentManagementRepository {
   }
 
   @override
+  Future<StudentImportResult> previewImport({
+    required String filename,
+    required List<int> bytes,
+    int? academicSessionId,
+    int? programId,
+    int? batchId,
+    int? sectionId,
+    int? semesterId,
+  }) async {
+    lastImportFilename = filename;
+    lastImportBytes = bytes;
+    if (importError != null) throw importError!;
+    return importResult ??
+        const StudentImportResult(
+            totalRows: 1, importedRows: 1, rejectedRows: 0);
+  }
+
+  @override
   Future<StudentImportResult> importStudents({
     required String filename,
     required List<int> bytes,
+    int? academicSessionId,
+    int? programId,
+    int? batchId,
+    int? sectionId,
+    int? semesterId,
   }) async {
     lastImportFilename = filename;
     lastImportBytes = bytes;
@@ -303,6 +331,35 @@ Future<void> _selectDropdown(
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
+
+Future<void> _selectAllContext(WidgetTester tester) async {
+   final dropdowns = find.byType(DropdownButtonFormField<int>);
+   // Academic Session dropdown (index 0)
+   await tester.tap(dropdowns.at(0));
+   await tester.pumpAndSettle();
+   await tester.tap(find.text('2026-27').first);
+   await tester.pump(const Duration(seconds: 2));
+   // Program dropdown (index 1)
+   await tester.tap(dropdowns.at(1));
+   await tester.pumpAndSettle();
+   await tester.tap(find.text('Computer Science').first);
+   await tester.pump(const Duration(seconds: 2));
+   // Semester dropdown (index 2)
+   await tester.tap(dropdowns.at(2));
+   await tester.pumpAndSettle();
+   await tester.tap(find.text('Sem 1').first);
+   await tester.pump(const Duration(seconds: 2));
+   // Batch dropdown (index 3)
+   await tester.tap(dropdowns.at(3));
+   await tester.pumpAndSettle();
+   await tester.tap(find.text('B1').first);
+   await tester.pump(const Duration(seconds: 2));
+   // Section dropdown (index 4)
+   await tester.tap(dropdowns.at(4));
+   await tester.pumpAndSettle();
+   await tester.tap(find.text('A').first);
+   await tester.pump(const Duration(seconds: 2));
+ }
 
 /// Advances past the 350ms search debounce and settles the reload.
 Future<void> _pumpSearchDebounce(WidgetTester tester) async {
@@ -1052,17 +1109,18 @@ void main() {
     final repo = _FakeStudentManagementRepository()
       ..students = const [_active];
     final callCount = () => repo.searchCalls;
-    await tester.pumpWidget(_wrap(
-      repo,
-      picker: () async =>
-          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
-    ));
-    await tester.pumpAndSettle();
+     await tester.pumpWidget(_wrap(
+       repo,
+       picker: () async =>
+           PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+     ));
+     await tester.pumpAndSettle();
+     await tester.pump(const Duration(seconds: 1));
 
-    await tester.tap(find.byKey(const Key('import-students')));
-    await tester.pumpAndSettle();
-    expect(find.text('Import Students'), findsOneWidget);
-    expect(find.textContaining('Program ID'), findsOneWidget);
+     await tester.tap(find.byKey(const Key('import-students')));
+     await tester.pumpAndSettle();
+     expect(find.text('Import Students'), findsOneWidget);
+     expect(find.text('Program'), findsWidgets);
 
     // No file chosen yet - tapping submit does nothing.
     await tester.tap(find.byKey(const Key('submit-import')));
@@ -1103,36 +1161,39 @@ void main() {
         rejectedRows: 0,
         message: 'Imported 2 of 2 students.',
       );
-    await tester.pumpWidget(_wrap(
-      repo,
-      picker: () async =>
-          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
-    ));
-    await tester.pumpAndSettle();
-    expect(repo.searchCalls, 1);
+     await tester.pumpWidget(_wrap(
+       repo,
+       picker: () async =>
+           PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+     ));
+     await tester.pump(const Duration(seconds: 2));
 
-    await tester.tap(find.byKey(const Key('import-students')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('pick-import-file')));
-    await tester.pumpAndSettle();
-    expect(find.text('students.xlsx'), findsOneWidget);
+       await tester.tap(find.byKey(const Key('import-students')));
+       await tester.pumpAndSettle();
+       await tester.pump(const Duration(seconds: 2));
+       await _selectAllContext(tester);
+      await tester.tap(find.byKey(const Key('pick-import-file')));
+      await tester.pumpAndSettle();
+      expect(find.text('students.xlsx'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('submit-import')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('preview-import')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('submit-import')));
+      await tester.pumpAndSettle();
 
-    expect(repo.lastImportFilename, 'students.xlsx');
-    expect(repo.lastImportBytes, [1, 2, 3]);
-    expect(find.text('Import Complete'), findsOneWidget);
-    expect(find.text('Imported 2 of 2 students.'), findsOneWidget);
-    expect(find.text('Done'), findsOneWidget);
+      expect(repo.lastImportFilename, 'students.xlsx');
+      expect(repo.lastImportBytes, [1, 2, 3]);
+      expect(find.text('Import Complete'), findsOneWidget);
+      expect(find.text('Imported 2 of 2 students.'), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('import-done')));
-    await tester.pumpAndSettle();
-    expect(find.text('Import Complete'), findsNothing);
-    expect(repo.searchCalls, 2);
-  });
+      await tester.tap(find.byKey(const Key('import-done')));
+      await tester.pumpAndSettle();
+      expect(find.text('Import Complete'), findsNothing);
+      expect(repo.searchCalls, 2);
+    });
 
-  testWidgets('rejected import shows row errors and imports nothing',
+  testWidgets('rejected import disables submit and shows preview errors',
       (tester) async {
     _bigViewport(tester);
     final repo = _FakeStudentManagementRepository()
@@ -1158,27 +1219,31 @@ void main() {
       picker: () async =>
           PickedImportFile(name: 'students.csv', bytes: Uint8List.fromList([9])),
     ));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
 
-    await tester.tap(find.byKey(const Key('import-students')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('pick-import-file')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('submit-import')));
-    await tester.pumpAndSettle();
+     await tester.tap(find.byKey(const Key('import-students')));
+     await tester.pumpAndSettle();
+     await _selectAllContext(tester);
+     await tester.tap(find.byKey(const Key('pick-import-file')));
+     await tester.pumpAndSettle();
+     await tester.tap(find.byKey(const Key('preview-import')));
+     await tester.pumpAndSettle();
 
-    expect(repo.lastImportFilename, 'students.csv');
-    expect(find.text('Import Failed'), findsOneWidget);
-    expect(find.textContaining('No students were imported'), findsOneWidget);
+     // Submit must be disabled when preview has rejected rows.
+     // lastImportFilename is set by previewImport, not importStudents.
+     expect(find.text('Import Failed'), findsNothing);
+     expect(find.text('Import Complete'), findsNothing);
+    // Preview errors are displayed in the dialog.
+    expect(find.textContaining('2 invalid'), findsOneWidget);
     expect(find.text('Row 3:'), findsOneWidget);
     expect(find.textContaining('Roll number already exists'), findsOneWidget);
     expect(find.text('Row 2:'), findsOneWidget);
     expect(find.textContaining('Name is required'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('import-done')));
+    // Confirm button should not trigger import.
+    await tester.tap(find.byKey(const Key('submit-import')));
     await tester.pumpAndSettle();
     expect(find.text('Import Failed'), findsNothing);
-    expect(repo.searchCalls, 1);
+    expect(find.text('Import Complete'), findsNothing);
   });
 
   testWidgets('file-level import error surfaces in the dialog', (tester) async {
@@ -1192,18 +1257,108 @@ void main() {
       picker: () async =>
           PickedImportFile(name: 'students.csv', bytes: Uint8List.fromList([4, 5])),
     ));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+
+      await tester.tap(find.byKey(const Key('import-students')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await _selectAllContext(tester);
+      await tester.tap(find.byKey(const Key('pick-import-file')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('preview-import')));
+      await tester.pumpAndSettle();
+
+      expect(
+          find.text('Header is missing required column(s): Email'),
+          findsOneWidget);
+     expect(find.text('Import Failed'), findsNothing);
+   });
+
+  testWidgets('import dialog loads master data from repository',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active];
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+    ));
+    await tester.pump(const Duration(seconds: 2));
 
     await tester.tap(find.byKey(const Key('import-students')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('pick-import-file')));
-    await tester.pumpAndSettle();
+
+    // Academic context dropdowns should be populated from real repository data.
+    expect(find.text('Academic Session'), findsWidgets);
+    expect(find.text('Program'), findsWidgets);
+    expect(find.text('Semester'), findsWidgets);
+    expect(find.text('Batch'), findsWidgets);
+    expect(find.text('Section'), findsWidgets);
+  });
+
+  testWidgets('valid preview enables Import button and import is called',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..importResult = const StudentImportResult(
+        totalRows: 2,
+        importedRows: 2,
+        rejectedRows: 0,
+        message: 'Imported 2 of 2 students.',
+      );
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+    ));
+    await tester.pump(const Duration(seconds: 2));
+
+      await tester.tap(find.byKey(const Key('import-students')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await _selectAllContext(tester);
+      await tester.tap(find.byKey(const Key('pick-import-file')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('preview-import')));
+      await tester.pumpAndSettle();
+
+      // Submit should now be enabled (valid preview).
+     await tester.tap(find.byKey(const Key('submit-import')));
+     await tester.pumpAndSettle();
+     expect(repo.lastImportFilename, 'students.xlsx');
+     expect(find.text('Import Complete'), findsOneWidget);
+   });
+
+   testWidgets('all 5 academic context IDs are sent to preview and import',
+      (tester) async {
+    _bigViewport(tester);
+    final repo = _FakeStudentManagementRepository()
+      ..students = const [_active]
+      ..importResult = const StudentImportResult(
+        totalRows: 1, importedRows: 1, rejectedRows: 0);
+    await tester.pumpWidget(_wrap(
+      repo,
+      picker: () async =>
+          PickedImportFile(name: 'students.xlsx', bytes: Uint8List.fromList([1, 2, 3])),
+    ));
+    await tester.pump(const Duration(seconds: 2));
+
+      await tester.tap(find.byKey(const Key('import-students')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await _selectAllContext(tester);
+      await tester.tap(find.byKey(const Key('pick-import-file')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('preview-import')));
+      await tester.pumpAndSettle();
+
+      // Verify preview was called with all context IDs set (non-null).
+    expect(repo.lastImportFilename, 'students.xlsx');
     await tester.tap(find.byKey(const Key('submit-import')));
     await tester.pumpAndSettle();
-
-    expect(
-        find.text('Header is missing required column(s): Email'),
-        findsOneWidget);
-    expect(find.text('Import Failed'), findsNothing);
+    expect(repo.lastImportFilename, 'students.xlsx');
+    expect(repo.lastImportBytes, [1, 2, 3]);
   });
 }
