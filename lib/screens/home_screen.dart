@@ -174,7 +174,7 @@ class HomeScreen extends StatelessWidget {
                   style: theme.textTheme.titleMedium
                       ?.copyWith(color: Colors.white),
                 ),
-                if (session.email != null) ...[
+                if (session.email != null && session.role != 'STUDENT') ...[
                   const SizedBox(height: 2),
                   Text(
                     session.email!,

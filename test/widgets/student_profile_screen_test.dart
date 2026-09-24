@@ -8,22 +8,27 @@ import 'package:flutter_test/flutter_test.dart';
 class _FakeStudentProfileRepository extends StudentProfileRepository {
   _FakeStudentProfileRepository();
   Future<StudentProfile> Function()? onGetMyProfile;
+  Future<StudentProfile> Function(Map<String, dynamic>)? onUpdateMyProfile;
 
   @override
   Future<StudentProfile> getMyProfile() =>
       onGetMyProfile != null
           ? onGetMyProfile!()
           : super.getMyProfile();
+
+  @override
+  Future<StudentProfile> updateMyProfile(Map<String, dynamic> data) =>
+      onUpdateMyProfile != null ? onUpdateMyProfile!(data) : super.updateMyProfile(data);
 }
 
 const _profile = StudentProfile(
   rollNumber: '2201CE001',
   enrollmentNumber: 'ENR-2022-001',
-  email: 'student@dagacs.local',
   name: 'Student User',
   gender: 'M',
   fatherName: 'Father',
   motherName: 'Mother',
+  personalEmail: 'student@test.com',
   age: 20,
   admissionDate: '2026-01-01',
   status: 'ACTIVE',
@@ -47,7 +52,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('renders profile details', (tester) async {
+  testWidgets('renders profile details without email', (tester) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -56,19 +61,20 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Student User'), findsOneWidget);
-    expect(find.text('2201CE001'), findsWidgets);
-    expect(find.text('ENR-2022-001'), findsOneWidget);
-    expect(find.text('student@dagacs.local'), findsOneWidget);
-    expect(find.text('M'), findsOneWidget);
-    expect(find.text('Father'), findsOneWidget);
-    expect(find.text('Mother'), findsOneWidget);
-    expect(find.text('20'), findsOneWidget);
-    expect(find.text('2026-01-01'), findsOneWidget);
-    expect(find.text('ACTIVE'), findsOneWidget);
-    expect(find.text('Computer Science'), findsOneWidget);
-    expect(find.text('B1'), findsOneWidget);
-    expect(find.text('A'), findsOneWidget);
+expect(find.text('Student User'), findsOneWidget);
+     expect(find.text('2201CE001'), findsWidgets);
+     expect(find.text('ENR-2022-001'), findsOneWidget);
+     expect(find.text('M'), findsOneWidget);
+     expect(find.text('Father'), findsOneWidget);
+     expect(find.text('Mother'), findsOneWidget);
+     expect(find.text('student@test.com'), findsOneWidget);
+     expect(find.text('20'), findsOneWidget);
+     expect(find.text('2026-01-01'), findsOneWidget);
+     expect(find.text('ACTIVE'), findsOneWidget);
+     expect(find.text('Computer Science'), findsOneWidget);
+     expect(find.text('B1'), findsOneWidget);
+     expect(find.text('A'), findsOneWidget);
+     expect(find.text('student@dagacs.local'), findsNothing);
   });
 
   testWidgets('shows error on network failure with retry', (tester) async {
@@ -150,4 +156,93 @@ void main() {
     expect(find.text('SU'), findsOneWidget);
     expect(find.text('Student User'), findsOneWidget);
   });
-}
+
+  testWidgets('edit button appears', (tester) async {
+    final repo = _FakeStudentProfileRepository()
+      ..onGetMyProfile = () async => _profile;
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.edit), findsOneWidget);
+  });
+
+  testWidgets('enteringEditMode showsEditableFields', (tester) async {
+    final repo = _FakeStudentProfileRepository()
+      ..onGetMyProfile = () async => _profile;
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pump();
+
+    expect(find.byType(TextField), findsWidgets);
+  });
+
+  testWidgets('saveCallsUpdateAndExitsEditMode', (tester) async {
+    final repo = _FakeStudentProfileRepository();
+    repo.onGetMyProfile = () async => _profile;
+    repo.onUpdateMyProfile = (data) async => _profile;
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.check));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.edit), findsOneWidget);
+  });
+
+    testWidgets('cancelDiscardsChanges', (tester) async {
+     final repo = _FakeStudentProfileRepository()
+       ..onGetMyProfile = () async => _profile;
+     await tester.pumpWidget(_wrap(repo));
+     await tester.pumpAndSettle();
+
+     await tester.tap(find.byIcon(Icons.edit));
+     await tester.pump();
+
+     await tester.tap(find.byIcon(Icons.cancel));
+     await tester.pump();
+
+     expect(find.byIcon(Icons.edit), findsOneWidget);
+   });
+
+   testWidgets('showsPersonalEmailInViewMode', (tester) async {
+     final repo = _FakeStudentProfileRepository()
+       ..onGetMyProfile = () async => _profile;
+     await tester.pumpWidget(_wrap(repo));
+     await tester.pumpAndSettle();
+
+     expect(find.text('student@test.com'), findsOneWidget);
+   });
+
+   testWidgets('editModeShowsPersonalEmailField', (tester) async {
+     final repo = _FakeStudentProfileRepository()
+       ..onGetMyProfile = () async => _profile;
+     await tester.pumpWidget(_wrap(repo));
+     await tester.pumpAndSettle();
+
+     await tester.tap(find.byIcon(Icons.edit));
+     await tester.pump();
+
+     expect(find.byType(TextField), findsWidgets);
+   });
+
+   testWidgets('saveIncludesPersonalEmail', (tester) async {
+     final repo = _FakeStudentProfileRepository();
+     repo.onGetMyProfile = () async => _profile;
+     repo.onUpdateMyProfile = (data) async => _profile;
+     await tester.pumpWidget(_wrap(repo));
+     await tester.pumpAndSettle();
+
+     await tester.tap(find.byIcon(Icons.edit));
+     await tester.pump();
+
+     await tester.tap(find.byIcon(Icons.check));
+     await tester.pump();
+
+     expect(find.byIcon(Icons.edit), findsOneWidget);
+   });
+ }

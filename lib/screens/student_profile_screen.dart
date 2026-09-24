@@ -6,11 +6,12 @@ import '../repositories/student_profile_repository.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../widgets/dagacs_widgets.dart';
 
-/// Read-only academic profile of the authenticated student (M5.1).
+/// Student profile of the authenticated student (M5.1).
 ///
 /// The backend resolves the identity from the JWT — no studentId is accepted
-/// from the client. All values are backend-authoritative; Flutter only renders
-/// the returned profile.
+/// from the client. Internal account email is not exposed to the student UI.
+/// The student may edit Father's Name, Mother's Name, and Gender.
+/// All other fields remain read-only.
 class StudentProfileScreen extends StatefulWidget {
   const StudentProfileScreen({super.key, required this.profileRepository});
 
@@ -22,8 +23,24 @@ class StudentProfileScreen extends StatefulWidget {
 
 class _StudentProfileScreenState extends State<StudentProfileScreen> {
   bool _loading = true;
+  bool _saving = false;
   String? _error;
   StudentProfile? _profile;
+  bool _editing = false;
+
+    final _fatherNameController = TextEditingController();
+    final _motherNameController = TextEditingController();
+    final _genderController = TextEditingController();
+    final _personalEmailController = TextEditingController();
+
+  @override
+  void dispose() {
+    _fatherNameController.dispose();
+    _motherNameController.dispose();
+    _genderController.dispose();
+    _personalEmailController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -55,16 +72,99 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     });
   }
 
+  Future<void> _save() async {
+    if (_profile == null) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final data = <String, dynamic>{};
+      if (_fatherNameController.text.isNotEmpty) {
+        data['fatherName'] = _fatherNameController.text;
+      }
+      if (_motherNameController.text.isNotEmpty) {
+        data['motherName'] = _motherNameController.text;
+      }
+      if (_genderController.text.isNotEmpty) {
+        data['gender'] = _genderController.text;
+      }
+      if (_personalEmailController.text.isNotEmpty) {
+        data['personalEmail'] = _personalEmailController.text;
+      }
+      final updated = await widget.profileRepository.updateMyProfile(data);
+      if (!mounted) return;
+      setState(() {
+        _profile = updated;
+        _editing = false;
+        _saving = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = _messageFor(e);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'Something went wrong while saving your profile.';
+      });
+    }
+  }
+
+  void _cancel() {
+    setState(() {
+      _editing = false;
+      _error = null;
+    });
+  }
+
   String _messageFor(ApiException e) {
     return userMessageFor(e);
+  }
+
+  void _startEditing() {
+    if (_profile == null) return;
+    _fatherNameController.text = _profile!.fatherName ?? '';
+    _motherNameController.text = _profile!.motherName ?? '';
+    _genderController.text = _profile!.gender ?? '';
+    _personalEmailController.text = _profile!.personalEmail ?? '';
+    setState(() {
+      _editing = true;
+      _error = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Profile')),
-      body: _buildBody(),
-    );
+      appBar: AppBar(
+        title: const Text('My Profile'),
+        actions: _editing
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.check),
+                  tooltip: 'Save',
+                  onPressed: _saving ? null : _save,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.cancel),
+                  tooltip: 'Cancel',
+                  onPressed: _saving ? null : _cancel,
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  tooltip: 'Edit profile',
+                  onPressed: _startEditing,
+                ),
+              ],
+    ),
+    body: _buildBody(),
+  );
   }
 
   Widget _buildBody() {
@@ -95,16 +195,18 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             child: Column(
               children: [
                 _buildRow(Icons.badge_outlined, 'Roll Number', profile.rollNumber),
-                _buildRow(
-                    Icons.fact_check_outlined, 'Enrollment Number', profile.enrollmentNumber),
-                _buildRow(Icons.mail_outline, 'Email', profile.email),
-                _buildRow(Icons.person_outline, 'Gender', profile.gender),
-                _buildRow(Icons.man_outlined, "Father's Name", profile.fatherName),
-                _buildRow(Icons.woman_outlined, "Mother's Name", profile.motherName),
+                _buildRow(Icons.fact_check_outlined, 'Enrollment Number', profile.enrollmentNumber),
+                _buildEditableOrReadOnly(Icons.person_outline, 'Gender', profile.gender, _genderController, _editing),
+                _buildEditableOrReadOnly(Icons.email_outlined, 'Personal Email', profile.personalEmail, _personalEmailController, _editing),
+                _buildEditableOrReadOnly(Icons.man_outlined, "Father's Name", profile.fatherName, _fatherNameController, _editing),
+                _buildEditableOrReadOnly(Icons.woman_outlined, "Mother's Name", profile.motherName, _motherNameController, _editing),
                 _buildRow(Icons.cake_outlined, 'Age', profile.age?.toString()),
-                _buildRow(
-                    Icons.event_outlined, 'Admission Date', profile.admissionDate),
+                _buildRow(Icons.event_outlined, 'Admission Date', profile.admissionDate),
                 _buildRow(Icons.health_and_safety_outlined, 'Status', profile.status),
+                if (_editing && _saving) const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: CircularProgressIndicator(),
+                ),
               ],
             ),
           ),
@@ -119,6 +221,35 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEditableOrReadOnly(
+    IconData icon,
+    String label,
+    String? value,
+    TextEditingController controller,
+    bool editing,
+  ) {
+    if (!editing) {
+      return _buildRow(icon, label, value);
+    }
+    return ListTile(
+      leading: Icon(icon, color: DagacsColors.brandPrimary),
+      title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+      trailing: SizedBox(
+        width: 200,
+        child: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: value ?? '',
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -158,7 +289,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           Text(
             profile.rollNumber!,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: DagacsColors.textSecondary),
+                  color: DagacsColors.textSecondary,
+                ),
           ),
       ],
     );

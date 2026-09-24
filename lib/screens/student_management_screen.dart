@@ -2236,8 +2236,8 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   Future<void> _preview() async {
     final file = _file;
     if (file == null) return;
-    if (_academicSessionId == null || _programId == null || _batchId == null || _sectionId == null || _semesterId == null) {
-      setState(() => _error = 'Please select all academic context values (Session, Program, Semester, Batch, Section).');
+    if (_academicSessionId == null || _programId == null || _batchId == null || _semesterId == null || (_sections.isNotEmpty && _sectionId == null)) {
+      setState(() => _error = 'Please select all required academic context values (Session, Program, Semester, Batch).');
       return;
     }
     setState(() {
@@ -2278,8 +2278,8 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
   Future<void> _import() async {
     final file = _file;
     if (file == null) return;
-    if (_academicSessionId == null || _programId == null || _batchId == null || _sectionId == null || _semesterId == null) {
-      setState(() => _error = 'Please select all academic context values (Session, Program, Semester, Batch, Section).');
+    if (_academicSessionId == null || _programId == null || _batchId == null || _semesterId == null || (_sections.isNotEmpty && _sectionId == null)) {
+      setState(() => _error = 'Please select all required academic context values (Session, Program, Semester, Batch).');
       return;
     }
     setState(() {
@@ -2505,15 +2505,28 @@ class _StudentImportDialogState extends State<_StudentImportDialog> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: _buildDropdown<Section>(
-                label: 'Section',
-                items: _sections,
-                value: _sectionId,
-                loading: _loadingSections,
-                onChanged: _onSectionChanged,
-                itemLabel: (s) => s.name ?? '',
-                itemValue: (s) => s.id,
-              ),
+              child: _sections.isNotEmpty
+                  ? _buildDropdown<Section>(
+                      label: 'Section',
+                      items: _sections,
+                      value: _sectionId,
+                      loading: _loadingSections,
+                      onChanged: _onSectionChanged,
+                      itemLabel: (s) => s.name ?? '',
+                      itemValue: (s) => s.id,
+                    )
+                  : Container(
+                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(
+                        color: DagacsColors.infoBg,
+                        borderRadius: BorderRadius.circular(DagacsRadius.md),
+                      ),
+                      child: const Text(
+                        'No sections available for this academic context.',
+                        style: TextStyle(fontSize: 12, color: DagacsColors.info),
+                      ),
+                    ),
             ),
           ],
         ),

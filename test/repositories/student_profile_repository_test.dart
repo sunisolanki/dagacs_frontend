@@ -55,8 +55,9 @@ void main() {
 
     test('parses profile fields', () async {
       final client = _clientReturning(200, '{"rollNumber":"2201CE001",'
-          '"name":"Student User","batchName":"B1","programName":"Computer Science",'
-          '"sectionName":"A"}');
+           '"name":"Student User","batchName":"B1",'
+           '"programName":"Computer Science","sectionName":"A",'
+           '"personalEmail":"student@test.com"}');
       final repo = StudentProfileRepository(client);
       final profile = await repo.getMyProfile();
       expect(profile.rollNumber, '2201CE001');
@@ -64,6 +65,7 @@ void main() {
       expect(profile.batchName, 'B1');
       expect(profile.programName, 'Computer Science');
       expect(profile.sectionName, 'A');
+      expect(profile.personalEmail, 'student@test.com');
     });
 
     test('throws ApiException on 401', () async {
@@ -91,6 +93,64 @@ void main() {
       final repo = StudentProfileRepository(client);
       expect(
         repo.getMyProfile(),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 500)),
+      );
+    });
+  });
+
+  group('StudentProfileRepository.updateMyProfile', () {
+    test('sends PUT to student/profile', () async {
+      String? seenPath;
+      String? seenBody;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenBody = req.body;
+          return http.Response('{"name":"Updated"}', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = StudentProfileRepository(client);
+      await repo.updateMyProfile({'fatherName': 'New Father', 'personalEmail': 'newemail@test.com'});
+      expect(seenPath, '/api/student/profile');
+      expect(seenBody, contains('fatherName'));
+      expect(seenBody, contains('personalEmail'));
+    });
+
+    test('updates profile fields', () async {
+      final client = _clientReturning(200, '{"rollNumber":"2201CE001",'
+           '"name":"Updated Name","batchName":"B1",'
+           '"programName":"Computer Science","sectionName":"A",'
+           '"personalEmail":"newemail@test.com"}');
+      final repo = StudentProfileRepository(client);
+      final profile = await repo.updateMyProfile({
+        'fatherName': 'New Father',
+        'motherName': 'New Mother',
+        'personalEmail': 'newemail@test.com',
+      });
+      expect(profile.rollNumber, '2201CE001');
+      expect(profile.name, 'Updated Name');
+      expect(profile.personalEmail, 'newemail@test.com');
+    });
+
+    test('throws ApiException on 401', () async {
+      final client = _clientReturning(401, '{"error":"Unauthorized"}');
+      final repo = StudentProfileRepository(client);
+      expect(
+        repo.updateMyProfile({'fatherName': 'New Father'}),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', 401)),
+      );
+    });
+
+    test('throws serverError when response is not a JSON object', () async {
+      final client = _clientReturning(200, '[]');
+      final repo = StudentProfileRepository(client);
+      expect(
+        repo.updateMyProfile({'fatherName': 'New Father'}),
         throwsA(isA<ApiException>()
             .having((e) => e.statusCode, 'statusCode', 500)),
       );

@@ -139,7 +139,7 @@ class AppShell extends StatelessWidget {
                 ),
               Padding(
                 padding: const EdgeInsets.only(left: DagacsSpace.md),
-                child: AppAvatar(name: session.fullName ?? session.email, size: 34),
+                child: AppAvatar(name: session.fullName ?? (session.email != null && session.role != 'STUDENT' ? session.email : null), size: 34),
               ),
               IconButton(
                 tooltip: 'Sign out',
@@ -231,7 +231,7 @@ class _NavContent extends StatelessWidget {
             padding: const EdgeInsets.all(DagacsSpace.lg),
             child: Row(
               children: [
-                AppAvatar(name: session.fullName ?? session.email, size: 42),
+                AppAvatar(name: session.fullName ?? (session.email != null && session.role != 'STUDENT' ? session.email : null), size: 42),
                 const SizedBox(width: DagacsSpace.md),
                 Expanded(
                   child: Column(
@@ -240,7 +240,7 @@ class _NavContent extends StatelessWidget {
                       Text(session.fullName ?? 'DAGACS user',
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.titleSmall),
-                      Text(session.email ?? session.role,
+                      Text(session.email != null && session.role != 'STUDENT' ? session.email! : session.role,
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.bodySmall),
                     ],

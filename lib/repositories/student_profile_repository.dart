@@ -7,6 +7,7 @@ import '../network/api_exception.dart';
 /// Backend authorization remains authoritative — this repository does NOT
 /// enforce any role checks. The student identity is resolved by the backend
 /// from the JWT; no studentId is ever sent.
+/// The internal account email is not exposed to the student UI.
 class StudentProfileRepository {
   StudentProfileRepository([ApiClient? client]) : _client = client ?? ApiClient();
 
@@ -19,6 +20,18 @@ class StudentProfileRepository {
         throw const ApiException.serverError();
       }
       return StudentProfile.fromJson(Map<String, dynamic>.from(data));
+    } on ApiException {
+      rethrow;
+    }
+  }
+
+  Future<StudentProfile> updateMyProfile(Map<String, dynamic> data) async {
+    try {
+      final response = await _client.put('/student/profile', body: data);
+      if (response is! Map) {
+        throw const ApiException.serverError();
+      }
+      return StudentProfile.fromJson(Map<String, dynamic>.from(response));
     } on ApiException {
       rethrow;
     }
