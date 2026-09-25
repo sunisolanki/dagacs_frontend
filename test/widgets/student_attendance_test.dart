@@ -135,12 +135,15 @@ testWidgets('MIXED attendance date test', (tester) async {
      await tester.pumpAndSettle();
      expect(find.text('Present'), findsNWidgets(2));
      expect(find.text('Absent'), findsOneWidget);
-     await tester.tap(find.text('Calendar'));
-     await tester.pumpAndSettle();
-     expect(find.text('4'), findsOneWidget);
-     await tester.tap(find.text('4'));
-     await tester.pumpAndSettle();
-     expect(find.textContaining('2026-09-04'), findsOneWidget);
+await tester.tap(find.text('Calendar'));
+       await tester.pumpAndSettle();
+       expect(find.text('4'), findsOneWidget);
+       await tester.tap(find.text('4'));
+       await tester.pump();
+       await tester.pump();
+       await tester.pump();
+       await tester.pump();
+       expect(find.textContaining('2026-09-04'), findsOneWidget);
    });
 
    testWidgets('tapping date shows detail panel', (tester) async {
@@ -172,15 +175,18 @@ testWidgets('MIXED attendance date test', (tester) async {
      await tester.pumpAndSettle();
      expect(find.text('4'), findsOneWidget);
      await tester.tap(find.text('4'));
-     await tester.pumpAndSettle();
+     await tester.pump();
+     await tester.pump();
+     await tester.pump();
+     await tester.pump();
      expect(find.textContaining('2026-09-04'), findsOneWidget);
    });
 
    testWidgets('subject chart renders with data', (tester) async {
-    final subjectData = [
-      SubjectAttendance(
-        subjectId: 5,
-        subjectName: 'Database Systems',
+     final subjectData = [
+       SubjectAttendance(
+         subjectId: 5,
+         subjectName: 'Database Systems',
         presentCount: 8,
         totalRecordedCount: 10,
         percentage: 80.0,
