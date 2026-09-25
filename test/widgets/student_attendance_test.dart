@@ -105,78 +105,78 @@ void main() {
     expect(find.byIcon(Icons.cancel), findsOneWidget);
   });
 
-  testWidgets('MIXED attendance date test', (tester) async {
-    final calendarData = [
-      CalendarAttendance(
-        date: '2026-09-04',
-        presentCount: 2,
-        absentCount: 1,
-        totalRecordedCount: 3,
-        percentage: 66.67,
-      ),
-    ];
-    final records = [
-      const AttendanceRecord(
-          id: 1, subjectId: 5, status: 'PRESENT', isPresent: true,
-          date: '2026-09-04', lecturePeriod: '1st'),
-      const AttendanceRecord(
-          id: 2, subjectId: 5, status: 'PRESENT', isPresent: true,
-          date: '2026-09-04', lecturePeriod: '2nd'),
-      const AttendanceRecord(
-          id: 3, subjectId: 5, status: 'ABSENT', isPresent: false,
-          date: '2026-09-04', lecturePeriod: '3rd'),
-    ];
-    final repo = _FakeAttendanceRepository();
-    repo.onGetMyAttendance = () async => records;
-    repo.onGetCalendarSummary = () async => calendarData;
-    repo.onGetSubjectSummaries = () async => [];
-    await tester.pumpWidget(MaterialApp(
-        home: StudentAttendanceScreen(attendanceRepository: repo)));
-    await tester.pumpAndSettle();
-    expect(find.text('Present'), findsWidgets);
-    expect(find.text('Absent'), findsWidgets);
-    await tester.tap(find.text('Calendar'));
-    await tester.pump();
-    await tester.pump();
-    await tester.tap(find.text('4'));
-    await tester.pump();
-    expect(find.textContaining('2026-09-04'), findsWidgets);
-  });
+testWidgets('MIXED attendance date test', (tester) async {
+     final calendarData = [
+       CalendarAttendance(
+         date: '2026-09-04',
+         presentCount: 2,
+         absentCount: 1,
+         totalRecordedCount: 3,
+         percentage: 66.67,
+       ),
+     ];
+     final records = [
+       const AttendanceRecord(
+           id: 1, subjectId: 5, status: 'PRESENT', isPresent: true,
+           date: '2026-09-04', lecturePeriod: '1st'),
+       const AttendanceRecord(
+           id: 2, subjectId: 5, status: 'PRESENT', isPresent: true,
+           date: '2026-09-04', lecturePeriod: '2nd'),
+       const AttendanceRecord(
+           id: 3, subjectId: 5, status: 'ABSENT', isPresent: false,
+           date: '2026-09-04', lecturePeriod: '3rd'),
+     ];
+     final repo = _FakeAttendanceRepository();
+     repo.onGetMyAttendance = () async => records;
+     repo.onGetCalendarSummary = () async => calendarData;
+     repo.onGetSubjectSummaries = () async => [];
+     await tester.pumpWidget(MaterialApp(
+         home: StudentAttendanceScreen(attendanceRepository: repo)));
+     await tester.pumpAndSettle();
+     expect(find.text('Present'), findsNWidgets(2));
+     expect(find.text('Absent'), findsOneWidget);
+     await tester.tap(find.text('Calendar'));
+     await tester.pumpAndSettle();
+     expect(find.text('4'), findsOneWidget);
+     await tester.tap(find.text('4'));
+     await tester.pumpAndSettle();
+     expect(find.textContaining('2026-09-04'), findsOneWidget);
+   });
 
-  testWidgets('tapping date shows detail panel', (tester) async {
-    final calendarData = [
-      CalendarAttendance(
-        date: '2026-09-04',
-        presentCount: 2,
-        absentCount: 1,
-        totalRecordedCount: 3,
-        percentage: 66.67,
-      ),
-    ];
-    final records = [
-      const AttendanceRecord(
-          id: 1, subjectId: 5, status: 'PRESENT', isPresent: true,
-          date: '2026-09-04', lecturePeriod: '1st'),
-      const AttendanceRecord(
-          id: 2, subjectId: 5, status: 'ABSENT', isPresent: false,
-          date: '2026-09-04', lecturePeriod: '2nd'),
-    ];
-    final repo = _FakeAttendanceRepository();
-    repo.onGetMyAttendance = () async => records;
-    repo.onGetCalendarSummary = () async => calendarData;
-    repo.onGetSubjectSummaries = () async => [];
-    await tester.pumpWidget(MaterialApp(
-        home: StudentAttendanceScreen(attendanceRepository: repo)));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Calendar'));
-    await tester.pump();
-    await tester.pump();
-    await tester.tap(find.text('4'));
-    await tester.pump();
-    expect(find.textContaining('2026-09-04'), findsWidgets);
-  });
+   testWidgets('tapping date shows detail panel', (tester) async {
+     final calendarData = [
+       CalendarAttendance(
+         date: '2026-09-04',
+         presentCount: 2,
+         absentCount: 1,
+         totalRecordedCount: 3,
+         percentage: 66.67,
+       ),
+     ];
+     final records = [
+       const AttendanceRecord(
+           id: 1, subjectId: 5, status: 'PRESENT', isPresent: true,
+           date: '2026-09-04', lecturePeriod: '1st'),
+       const AttendanceRecord(
+           id: 2, subjectId: 5, status: 'ABSENT', isPresent: false,
+           date: '2026-09-04', lecturePeriod: '2nd'),
+     ];
+     final repo = _FakeAttendanceRepository();
+     repo.onGetMyAttendance = () async => records;
+     repo.onGetCalendarSummary = () async => calendarData;
+     repo.onGetSubjectSummaries = () async => [];
+     await tester.pumpWidget(MaterialApp(
+         home: StudentAttendanceScreen(attendanceRepository: repo)));
+     await tester.pumpAndSettle();
+     await tester.tap(find.text('Calendar'));
+     await tester.pumpAndSettle();
+     expect(find.text('4'), findsOneWidget);
+     await tester.tap(find.text('4'));
+     await tester.pumpAndSettle();
+     expect(find.textContaining('2026-09-04'), findsOneWidget);
+   });
 
-  testWidgets('subject chart renders with data', (tester) async {
+   testWidgets('subject chart renders with data', (tester) async {
     final subjectData = [
       SubjectAttendance(
         subjectId: 5,
@@ -199,11 +199,12 @@ void main() {
     repo.onGetSubjectSummaries = () async => subjectData;
     await tester.pumpWidget(MaterialApp(
         home: StudentAttendanceScreen(attendanceRepository: repo)));
-    await tester.pumpAndSettle();
-    expect(find.byType(GridView), findsNothing);
-  });
+await tester.pumpAndSettle();
+     expect(find.byType(GridView), findsNothing);
+     expect(find.byType(ListView), findsNWidgets(1));
+   });
 
-testWidgets('date bar shows Present/Absent toggles', (tester) async {
+ testWidgets('date bar shows Present/Absent toggles', (tester) async {
      final repo = _FakeAttendanceRepository();
      repo.onGetMyAttendance = () async => [
            const AttendanceRecord(
