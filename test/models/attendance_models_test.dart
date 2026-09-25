@@ -5,7 +5,9 @@ import 'package:dagacs_frontend/models/attendance_session.dart';
 import 'package:dagacs_frontend/models/attendance_session_create_request.dart';
 import 'package:dagacs_frontend/models/attendance_session_update_request.dart';
 import 'package:dagacs_frontend/models/attendance_update_request.dart';
+import 'package:dagacs_frontend/models/calendar_attendance.dart';
 import 'package:dagacs_frontend/models/session_student.dart';
+import 'package:dagacs_frontend/models/subject_attendance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -175,6 +177,78 @@ void main() {
       final json = r.toJson();
       expect(json['newStatus'], 'PRESENT');
       expect(json.containsKey('reason'), isFalse);
+    });
+  });
+
+  group('SubjectAttendance', () {
+    test('parses all fields', () {
+      final s = SubjectAttendance.fromJson({
+        'subjectId': 5,
+        'subjectName': 'Database Systems',
+        'presentCount': 8,
+        'totalRecordedCount': 10,
+        'percentage': 80.0,
+      });
+      expect(s.subjectId, 5);
+      expect(s.subjectName, 'Database Systems');
+      expect(s.presentCount, 8);
+      expect(s.totalRecordedCount, 10);
+      expect(s.percentage, 80.0);
+    });
+
+    test('handles missing optional fields', () {
+      final s = SubjectAttendance.fromJson({'subjectId': 5});
+      expect(s.subjectId, 5);
+      expect(s.subjectName, '');
+      expect(s.presentCount, 0);
+      expect(s.totalRecordedCount, 0);
+      expect(s.percentage, isNull);
+    });
+
+    test('handles null subjectName', () {
+      final s = SubjectAttendance.fromJson({
+        'subjectId': 5,
+        'subjectName': null,
+        'presentCount': 3,
+        'totalRecordedCount': 5,
+      });
+      expect(s.subjectName, '');
+    });
+  });
+
+  group('CalendarAttendance', () {
+    test('parses all fields', () {
+      final c = CalendarAttendance.fromJson({
+        'date': '2026-09-04',
+        'presentCount': 3,
+        'absentCount': 1,
+        'totalRecordedCount': 4,
+        'percentage': 75.0,
+      });
+      expect(c.date, '2026-09-04');
+      expect(c.presentCount, 3);
+      expect(c.absentCount, 1);
+      expect(c.totalRecordedCount, 4);
+      expect(c.percentage, 75.0);
+    });
+
+    test('handles missing optional fields', () {
+      final c = CalendarAttendance.fromJson({'date': '2026-09-04'});
+      expect(c.date, '2026-09-04');
+      expect(c.presentCount, 0);
+      expect(c.absentCount, 0);
+      expect(c.totalRecordedCount, 0);
+      expect(c.percentage, isNull);
+    });
+
+    test('handles null presentCount and absentCount', () {
+      final c = CalendarAttendance.fromJson({
+        'date': '2026-09-04',
+        'presentCount': null,
+        'absentCount': null,
+      });
+      expect(c.presentCount, 0);
+      expect(c.absentCount, 0);
     });
   });
 }

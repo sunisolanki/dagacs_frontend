@@ -4,8 +4,12 @@ import '../core/navigation/navigator.dart';
 import '../core/session/session_controller.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../repositories/master_data_repository.dart';
+import '../models/attendance_percentage.dart';
+import '../models/subject_attendance.dart';
+import '../repositories/attendance_repository.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../widgets/attendance_summary_cards.dart';
 
 /// Authenticated home. Role-aware welcome plus navigation into each role's
 /// modules (unchanged routes, tiles and role gating).
@@ -14,10 +18,12 @@ class HomeScreen extends StatelessWidget {
     super.key,
     required this.session,
     required this.masterDataRepository,
+    this.attendanceRepository,
   });
 
   final SessionController session;
   final MasterDataRepository masterDataRepository;
+  final AttendanceRepository? attendanceRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +56,9 @@ class HomeScreen extends StatelessWidget {
                       child: _buildWelcome(context),
                     ),
                     const SizedBox(height: DagacsSpace.lg),
+                    if (session.role == 'STUDENT' && attendanceRepository != null)
+                      _buildAttendanceSummary(context),
+                    const SizedBox(height: DagacsSpace.lg),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: DagacsSpace.lg),
@@ -72,6 +81,47 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+
+Widget _buildAttendanceSummary(BuildContext context) {
+     return FutureBuilder<AttendancePercentage>(
+       future: attendanceRepository!.getOverallAttendanceCalculation(),
+       builder: (context, overallSnapshot) {
+         if (overallSnapshot.connectionState == ConnectionState.waiting) {
+           return const Padding(
+             padding: EdgeInsets.symmetric(horizontal: DagacsSpace.lg),
+             child: AppLoadingState(message: 'Loading attendance summary...'),
+           );
+         }
+         final subjectsFuture = attendanceRepository!.getSubjectAttendanceSummaries();
+         return FutureBuilder<List<SubjectAttendance>>(
+           future: subjectsFuture,
+           builder: (context, subjectsSnapshot) {
+             if (subjectsSnapshot.connectionState == ConnectionState.waiting) {
+               return const Padding(
+                 padding: EdgeInsets.symmetric(horizontal: DagacsSpace.lg),
+                 child: AppLoadingState(message: 'Loading attendance summary...'),
+               );
+             }
+             final subjects = subjectsSnapshot.data ?? [];
+             final overall = overallSnapshot.data;
+             final error = overallSnapshot.error?.toString();
+             if (subjects.isEmpty && overall == null) {
+               return const SizedBox.shrink();
+             }
+             return Padding(
+               padding: const EdgeInsets.symmetric(horizontal: DagacsSpace.lg),
+               child: AttendanceSummaryCards(
+                 overall: overall,
+                 loading: false,
+                 error: error,
+                 onRetry: () {},
+               ),
+             );
+           },
+         );
+       },
+     );
+   }
 
   /// Short role-specific sentence that introduces the user's module set.
   String _roleSubtitle(String role) {

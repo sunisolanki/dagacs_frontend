@@ -398,4 +398,103 @@ void main() {
       }
     });
   });
+
+  group('AttendanceRepository.getSubjectAttendanceSummaries', () {
+    test('sends GET to student/attendance/calculation/subjects', () async {
+      String? seenPath;
+      String? seenAuth;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenAuth = req.headers['Authorization'];
+          return http.Response(
+              '[{"subjectId":5,"subjectName":"DS","presentCount":8,"totalRecordedCount":10,"percentage":80.0}]',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = AttendanceRepository(client);
+      final result = await repo.getSubjectAttendanceSummaries();
+      expect(seenPath, '/api/student/attendance/calculation/subjects');
+      expect(seenAuth, 'Bearer token');
+      expect(result.length, 1);
+      expect(result[0].subjectName, 'DS');
+      expect(result[0].presentCount, 8);
+    });
+
+    test('sends subject path with date query params and no studentId',
+        () async {
+      String? seenPath;
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenQuery = req.url.queryParameters;
+          return http.Response('[]', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = AttendanceRepository(client);
+      await repo.getSubjectAttendanceSummaries(
+          startDate: DateTime(2026, 1, 1), endDate: DateTime(2026, 1, 31));
+      expect(seenPath, '/api/student/attendance/calculation/subjects');
+      expect(seenQuery!['startDate'], '2026-01-01');
+      expect(seenQuery!['endDate'], '2026-01-31');
+      expect(seenQuery!.containsKey('studentId'), isFalse);
+    });
+  });
+
+  group('AttendanceRepository.getCalendarAttendanceSummary', () {
+    test('sends GET to student/attendance/calculation/calendar', () async {
+      String? seenPath;
+      String? seenAuth;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenAuth = req.headers['Authorization'];
+          return http.Response(
+              '[{"date":"2026-09-04","presentCount":3,"absentCount":1,"totalRecordedCount":4,"percentage":75.0}]',
+              200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = AttendanceRepository(client);
+      final result = await repo.getCalendarAttendanceSummary();
+      expect(seenPath, '/api/student/attendance/calculation/calendar');
+      expect(seenAuth, 'Bearer token');
+      expect(result.length, 1);
+      expect(result[0].date, '2026-09-04');
+      expect(result[0].presentCount, 3);
+      expect(result[0].absentCount, 1);
+    });
+
+    test('sends calendar path with date query params and no studentId',
+        () async {
+      String? seenPath;
+      Map<String, String>? seenQuery;
+      final client = ApiClient(
+        baseUrl: 'http://test.local/api',
+        tokenProvider: () async => 'token',
+        httpClient: _MockClient((req) {
+          seenPath = req.url.path;
+          seenQuery = req.url.queryParameters;
+          return http.Response('[]', 200,
+              headers: {'content-type': 'application/json'});
+        }),
+      );
+      final repo = AttendanceRepository(client);
+      await repo.getCalendarAttendanceSummary(
+          startDate: DateTime(2026, 1, 1), endDate: DateTime(2026, 1, 31));
+      expect(seenPath, '/api/student/attendance/calculation/calendar');
+      expect(seenQuery!['startDate'], '2026-01-01');
+      expect(seenQuery!['endDate'], '2026-01-31');
+      expect(seenQuery!.containsKey('studentId'), isFalse);
+    });
+  });
 }

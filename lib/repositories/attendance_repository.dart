@@ -5,7 +5,9 @@ import '../models/attendance_session.dart';
 import '../models/attendance_session_create_request.dart';
 import '../models/attendance_session_update_request.dart';
 import '../models/attendance_update_request.dart';
+import '../models/calendar_attendance.dart';
 import '../models/session_student.dart';
+import '../models/subject_attendance.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
 
@@ -120,20 +122,38 @@ class AttendanceRepository {
           {DateTime? startDate, DateTime? endDate}) =>
       _single(_calculationPath(startDate: startDate, endDate: endDate));
 
-  /// Subject-wise attendance calculation for the authenticated student.
-  Future<AttendancePercentage> getSubjectAttendanceCalculation(
+Future<AttendancePercentage> getSubjectAttendanceCalculation(
           int subjectId,
           {DateTime? startDate, DateTime? endDate}) =>
       _single(_calculationPath(
           subjectId: subjectId, startDate: startDate, endDate: endDate));
 
-  // ── Internal helpers ───────────────────────────────────────────
+  /// All subject summaries in one request.
+  Future<List<SubjectAttendance>> getSubjectAttendanceSummaries(
+          {DateTime? startDate, DateTime? endDate}) {
+    final path = _calculationPath(
+        basePath: '/student/attendance/calculation/subjects',
+        startDate: startDate, endDate: endDate);
+    return _list(path, SubjectAttendance.fromJson);
+  }
+
+  /// Calendar/date-wise attendance summary.
+  Future<List<CalendarAttendance>> getCalendarAttendanceSummary(
+          {DateTime? startDate, DateTime? endDate}) {
+    final path = _calculationPath(
+        basePath: '/student/attendance/calculation/calendar',
+        startDate: startDate, endDate: endDate);
+    return _list(path, CalendarAttendance.fromJson);
+  }
+
+  // ── Internal helpers ───────────────────────────────────
 
   String _calculationPath(
-      {int? subjectId, DateTime? startDate, DateTime? endDate}) {
-    final path = subjectId == null
-        ? '/student/attendance/calculation'
-        : '/student/attendance/calculation/subject/$subjectId';
+      {int? subjectId, String? basePath, DateTime? startDate, DateTime? endDate}) {
+    final path = basePath ??
+        (subjectId == null
+            ? '/student/attendance/calculation'
+            : '/student/attendance/calculation/subject/$subjectId');
     final params = <String>[];
     if (startDate != null) {
       params.add('startDate=${_formatDate(startDate)}');
