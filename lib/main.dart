@@ -108,7 +108,12 @@ class DAGACSApp extends StatelessWidget {
                 builder: (_) => HomeScreen(
                     session: AppDependencies.session,
                     masterDataRepository:
-                        AppDependencies.masterDataRepository));
+                        AppDependencies.masterDataRepository,
+                    // Student home renders the live attendance dashboard; the
+                    // parameter is nullable so a host without the repository
+                    // simply falls back to the plain tile list.
+                    attendanceRepository:
+                        AppDependencies.attendanceRepository));
           case AppRoutes.masterData:
             return MaterialPageRoute(
                 builder: (_) => MasterDataScreen(

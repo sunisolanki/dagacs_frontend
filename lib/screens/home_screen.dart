@@ -53,10 +53,11 @@ class HomeScreen extends StatelessWidget {
                           horizontal: DagacsSpace.lg),
                       child: _buildWelcome(context),
                     ),
-                    const SizedBox(height: DagacsSpace.lg),
-                    if (session.role == 'STUDENT' && attendanceRepository != null)
+                    if (session.role == 'STUDENT' && attendanceRepository != null) ...[
+                      const SizedBox(height: DagacsSpace.lg),
                       _buildAttendanceSummary(context),
-                    const SizedBox(height: DagacsSpace.lg),
+                    ],
+                    const SizedBox(height: DagacsSpace.xl),
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           horizontal: DagacsSpace.lg),
@@ -81,10 +82,10 @@ class HomeScreen extends StatelessWidget {
   }
 
 Widget _buildAttendanceSummary(BuildContext context) {
-     return StudentDashboard(
-       attendanceRepository: attendanceRepository!,
-     );
-   }
+  return StudentDashboard(
+    attendanceRepository: attendanceRepository!,
+  );
+}
 
   /// Short role-specific sentence that introduces the user's module set.
   String _roleSubtitle(String role) {
