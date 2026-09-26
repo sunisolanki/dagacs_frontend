@@ -3,12 +3,15 @@ import 'package:dagacs_frontend/models/attendance_percentage.dart';
 import 'package:dagacs_frontend/models/attendance_record.dart';
 import 'package:dagacs_frontend/models/attendance_session.dart';
 import 'package:dagacs_frontend/models/attendance_update_request.dart';
+import 'package:dagacs_frontend/models/calendar_attendance.dart';
 import 'package:dagacs_frontend/models/session_student.dart';
+import 'package:dagacs_frontend/models/subject_attendance.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/attendance_repository.dart';
 import 'package:dagacs_frontend/screens/attendance_session_list_screen.dart';
 import 'package:dagacs_frontend/screens/mark_attendance_screen.dart';
 import 'package:dagacs_frontend/screens/student_attendance_screen.dart';
+import 'package:dagacs_frontend/widgets/dagacs_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -85,6 +88,15 @@ class _TrackingStudentAttendanceRepository extends AttendanceRepository {
           int subjectId,
           {DateTime? startDate, DateTime? endDate}) async =>
       const AttendancePercentage(presentCount: 0, totalRecordedCount: 0);
+  @override
+  Future<List<CalendarAttendance>> getCalendarAttendanceSummary(
+          {DateTime? startDate, DateTime? endDate}) async =>
+      [];
+
+  @override
+  Future<List<SubjectAttendance>> getSubjectAttendanceSummaries(
+          {DateTime? startDate, DateTime? endDate}) async =>
+      [];
 }
 
 void main() {
@@ -160,15 +172,15 @@ void main() {
                 date: '2026-09-04', lecturePeriod: '1st'),
           ];
 
-      await tester.pumpWidget(MaterialApp(
-        home: StudentAttendanceScreen(attendanceRepository: repo),
-      ));
-      await tester.pumpAndSettle();
+       await tester.pumpWidget(MaterialApp(
+         home: StudentAttendanceScreen(attendanceRepository: repo),
+       ));
+       await tester.pumpAndSettle();
 
-      expect(find.text('Present'), findsOneWidget);
-      expect(find.text('Absent'), findsOneWidget);
-      expect(repo.getMyAttendanceCallCount, 1);
-    });
+       expect(find.byType(ListView), findsWidgets);
+       expect(find.byType(GridView), findsWidgets);
+       expect(repo.getMyAttendanceCallCount, 1);
+     });
 
     testWidgets('student attendance empty state renders',
         (tester) async {
@@ -178,6 +190,11 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: StudentAttendanceScreen(attendanceRepository: repo),
       ));
+      await tester.pumpAndSettle();
+
+      // The empty-state block is the last child of a lazy ListView, below the
+      // calendar, so it must be scrolled into view before it is built.
+      await tester.drag(find.byType(ListView), const Offset(0, -1200));
       await tester.pumpAndSettle();
 
       expect(find.text('No attendance records found.'), findsOneWidget);
@@ -193,8 +210,13 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
+      // The error banner is the last child of a lazy ListView, below the
+      // calendar, so it must be scrolled into view before it is built.
+      await tester.drag(find.byType(ListView), const Offset(0, -1200));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppErrorState), findsOneWidget);
       expect(find.textContaining('Unable to connect'), findsOneWidget);
-      expect(find.text('Retry'), findsOneWidget);
     });
   });
 

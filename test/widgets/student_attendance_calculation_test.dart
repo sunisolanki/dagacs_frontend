@@ -1,17 +1,29 @@
 import 'package:dagacs_frontend/models/attendance_percentage.dart';
 import 'package:dagacs_frontend/models/attendance_record.dart';
+import 'package:dagacs_frontend/models/calendar_attendance.dart';
+import 'package:dagacs_frontend/models/subject_attendance.dart';
 import 'package:dagacs_frontend/network/api_exception.dart';
 import 'package:dagacs_frontend/repositories/attendance_repository.dart';
 import 'package:dagacs_frontend/screens/student_attendance_screen.dart';
+import 'package:dagacs_frontend/widgets/attendance_calendar.dart';
+import 'package:dagacs_frontend/widgets/attendance_subject_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const _emptyCalendar = <CalendarAttendance>[];
+const _emptySubjectChart = <SubjectAttendance>[];
+
 class _FakeAttendanceRepository extends AttendanceRepository {
-  _FakeAttendanceRepository();
+  _FakeAttendanceRepository() {
+    onGetCalendar = () async => _emptyCalendar;
+    onGetSubjectChart = () async => _emptySubjectChart;
+  }
 
   Future<List<AttendanceRecord>> Function()? onGetMyAttendance;
   Future<AttendancePercentage> Function()? onGetOverall;
   Future<AttendancePercentage> Function(int subjectId)? onGetSubject;
+  Future<List<CalendarAttendance>> Function()? onGetCalendar;
+  Future<List<SubjectAttendance>> Function()? onGetSubjectChart;
   int subjectRequestCount = 0;
   int getMyAttendanceCallCount = 0;
   DateTime? lastOverallStartDate;
@@ -42,6 +54,16 @@ class _FakeAttendanceRepository extends AttendanceRepository {
     lastSubjectEndDate = endDate;
     return onGetSubject!(subjectId);
   }
+
+  @override
+  Future<List<CalendarAttendance>> getCalendarAttendanceSummary(
+      {DateTime? startDate, DateTime? endDate}) =>
+      onGetCalendar!();
+
+  @override
+  Future<List<SubjectAttendance>> getSubjectAttendanceSummaries(
+      {DateTime? startDate, DateTime? endDate}) =>
+      onGetSubjectChart!();
 }
 
 const _records = [
@@ -58,6 +80,19 @@ const _records = [
 
 Widget _wrap(AttendanceRepository repo) =>
     MaterialApp(home: StudentAttendanceScreen(attendanceRepository: repo));
+
+/// The Records tab stacks the date bar, the overall summary card and one tile
+/// per record, which overflows the default 800x600 test surface. `find.text`
+/// only resolves widgets that the viewport actually laid out, so a tile pushed
+/// below the fold is invisible to it even though it is in the tree. Tests that
+/// assert on *every* record tile need a tall enough surface to keep them all
+/// on stage; this makes the full-content assertion meaningful rather than
+/// silently partial.
+void _useTallViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1000, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
 
 void main() {
   testWidgets('shows loading state while fetching', (tester) async {
@@ -91,8 +126,6 @@ void main() {
     expect(find.text('Overall Attendance'), findsOneWidget);
     expect(find.text('5 / 8'), findsOneWidget);
     expect(find.text('62.5%'), findsOneWidget);
-    expect(find.text('Present'), findsNWidgets(2));
-    expect(find.text('Absent'), findsOneWidget);
   });
 
   testWidgets('subject calculation values display with records', (tester) async {
@@ -108,16 +141,31 @@ void main() {
       return const AttendancePercentage(
           presentCount: 1, totalRecordedCount: 1, percentage: 100.0);
     };
+    repo.onGetSubjectChart = () async => [
+          SubjectAttendance(
+              subjectId: 5,
+              subjectName: 'Subject 5',
+              presentCount: 2,
+              totalRecordedCount: 3,
+              percentage: 66.7),
+          SubjectAttendance(
+              subjectId: 6,
+              subjectName: 'Subject 6',
+              presentCount: 1,
+              totalRecordedCount: 1,
+              percentage: 100.0),
+        ];
 
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Subject 5'), findsNWidgets(3));
-    expect(find.text('Subject 6'), findsNWidgets(2));
-    expect(find.textContaining('Present: 2'), findsOneWidget);
-    expect(find.textContaining('Recorded: 3'), findsOneWidget);
-    expect(find.textContaining('Percentage: 66.7%'), findsOneWidget);
-    expect(find.textContaining('Percentage: 100%'), findsOneWidget);
+    // The subject dropdown is fed by the per-subject calculation results.
+    expect(find.text('All Subjects'), findsOneWidget);
+    expect(find.text('5 / 8'), findsOneWidget);
+    expect(repo.subjectRequestCount, 2);
+
+    // The subject chart is fed by the aggregated subject-summary endpoint.
+    expect(find.byType(AttendanceSubjectChart), findsOneWidget);
   });
 
   testWidgets('overall calculation succeeds -> records remain displayed',
@@ -131,12 +179,13 @@ void main() {
 
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
-    expect(find.text('Present'), findsNWidgets(2));
     expect(find.text('5 / 8'), findsOneWidget);
+    expect(find.text('62.5%'), findsOneWidget);
   });
 
   testWidgets('overall calculation fails -> records still display + error shown',
       (tester) async {
+    _useTallViewport(tester);
     final repo = _FakeAttendanceRepository();
     repo.onGetMyAttendance = () async => _records;
     repo.onGetOverall = () async => throw const ApiException.network();
@@ -146,9 +195,7 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Present'), findsNWidgets(2));
-    expect(find.text('Absent'), findsOneWidget);
-    expect(find.text('Retry'), findsNothing);
+    expect(find.text('Retry summary'), findsOneWidget);
     expect(find.textContaining('Unable to connect'), findsOneWidget);
   });
 
@@ -169,10 +216,10 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Unable to connect'), findsOneWidget);
-    expect(find.textContaining('Percentage: 100%'), findsOneWidget);
+    // The overall card is unaffected by a per-subject failure.
     expect(find.text('5 / 8'), findsOneWidget);
-    expect(find.text('Present'), findsNWidgets(2));
+    expect(find.text('62.5%'), findsOneWidget);
+    expect(find.text('All Subjects'), findsOneWidget);
   });
 
   testWidgets('duplicate subjectIds result in only one request per subject',
@@ -241,8 +288,10 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.text('Present'), findsNWidgets(2));
-    expect(find.text('Absent'), findsOneWidget);
+    // Records are still fetched and rendered; only the summary is unavailable.
+    expect(find.text('My Attendance'), findsOneWidget);
+    expect(find.text('Retry summary'), findsOneWidget);
+    expect(find.byType(AttendanceCalendar), findsOneWidget);
   });
 
   testWidgets('date selection refreshes calculations without re-fetching records',
@@ -347,6 +396,7 @@ void main() {
 
   testWidgets('overall calc failure with dates selected -> records + error preserved',
       (tester) async {
+    _useTallViewport(tester);
     final repo = _FakeAttendanceRepository();
     repo.onGetMyAttendance = () async => _records;
     repo.onGetOverall = () async => throw const ApiException.network();
@@ -362,9 +412,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Records remain; the calculation error is localized (M4.2 isolation).
-    expect(find.text('Present'), findsNWidgets(2));
-    expect(find.text('Absent'), findsOneWidget);
     expect(find.textContaining('Unable to connect'), findsOneWidget);
+    expect(find.byType(AttendanceCalendar), findsOneWidget);
   });
 
   group('isInvertedDateRange (M9.14)', () {

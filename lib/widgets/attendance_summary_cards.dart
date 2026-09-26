@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../models/attendance_percentage.dart';
+import '../core/navigation/navigator.dart';
 import 'dagacs_widgets.dart';
 
 class AttendanceSummaryCards extends StatelessWidget {
@@ -11,12 +12,14 @@ class AttendanceSummaryCards extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRetry,
+    this.showViewFullAttendance = false,
   });
 
   final AttendancePercentage? overall;
   final bool loading;
   final String? error;
   final VoidCallback onRetry;
+  final bool showViewFullAttendance;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +65,16 @@ class AttendanceSummaryCards extends StatelessWidget {
                 _buildDonut(overall!),
                 const SizedBox(height: 16),
                 _buildStatCards(overall!),
+                if (showViewFullAttendance) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppPrimaryButton(
+                      onPressed: () => Navigator.pushNamed(context, AppRoutes.studentAttendance),
+                      child: const Text('View Full Attendance →'),
+                    ),
+                  ),
+                ],
               ]
               else
                 const Text('No attendance records available'),

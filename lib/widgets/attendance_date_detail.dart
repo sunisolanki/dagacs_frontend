@@ -7,10 +7,12 @@ class AttendanceDateDetail extends StatelessWidget {
     super.key,
     required this.date,
     required this.records,
+    this.subjectNamesById,
   });
 
   final String? date;
   final List<AttendanceRecord> records;
+  final Map<int, String>? subjectNamesById;
 
   @override
   Widget build(BuildContext context) {
@@ -59,12 +61,15 @@ class AttendanceDateDetail extends StatelessWidget {
 
   Widget _buildRecordTile(AttendanceRecord r) {
     final isPresent = r.isPresent == true || r.status == 'PRESENT';
+    final subjectName = subjectNamesById != null
+        ? (subjectNamesById![r.subjectId] ?? 'Subject ${r.subjectId ?? "-"}')
+        : 'Subject ${r.subjectId ?? "-"}';
     return ListTile(
       leading: Icon(
         isPresent ? Icons.check_circle : Icons.cancel,
         color: isPresent ? Colors.green : Colors.red,
       ),
-      title: Text('Subject ${r.subjectId ?? "-"}'),
+      title: Text(subjectName),
       subtitle: Text('${r.lecturePeriod ?? "-"} | ${r.status ?? "-"}'),
       trailing: Text(
         isPresent ? 'Present' : 'Absent',

@@ -31,6 +31,7 @@ bool isInvertedDateRange(DateTime? start, DateTime? end) =>
 ///   D. Interactive calendar (GridView.builder) — date-wise summary.
 ///   E. Subject-wise chart — bar chart of percentages.
 ///   F. Selected-date details — subject-level attendance for chosen date.
+///   G. Subject filter dropdown — filter calendar and date details by subject.
 ///
 /// A failure in B, C, D, or E must never invalidate the records (A).
 /// Calculation values come straight from the backend API — Flutter never
@@ -60,57 +61,49 @@ class _SubjectCalc {
   bool get loading => data == null && error == null;
 }
 
-class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
-    with SingleTickerProviderStateMixin {
+class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
   bool _loading = true;
   String? _error;
   List<AttendanceRecord> _records = [];
 
-  // Optional inclusive date-range filter (M4.3). Applies to the calculation
-  // requests only — GET /student/attendance/my stays undated.
   DateTime? _startDate;
   DateTime? _endDate;
-
-  // M9.14: client-side range validation message (start <= end). Set when a
-  // pick would invert the range; the inverted request is never issued.
   String? _dateError;
 
-  // Overall calculation (B) — independent of records.
   bool _overallLoading = true;
   String? _overallError;
   AttendancePercentage? _overall;
 
-  // Per-subject calculations (C) — independent per subject.
   Map<int, _SubjectCalc> _subjectCalcs = {};
 
-  // Calendar data (D)
   bool _calendarLoading = true;
   String? _calendarError;
   List<CalendarAttendance> _calendarData = [];
 
-  // Subject chart data (E)
   bool _chartLoading = true;
   String? _chartError;
   List<SubjectAttendance> _subjectChartData = [];
 
-  // Selected date for detail view (F)
   String? _selectedDate;
   List<AttendanceRecord> _selectedDateRecords = [];
 
-  // Active tab is managed by _tabController
-  late final TabController _tabController;
+  int? _selectedSubjectId;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _load();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     super.dispose();
+  }
+
+  Map<int, String> get subjectNamesById {
+    return {
+      for (final s in _subjectChartData) s.subjectId: s.subjectName,
+    };
   }
 
   Future<void> _load() async {
@@ -129,7 +122,6 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
       _subjectChartData = [];
     });
 
-    // A) Attendance records — isolated from calculation failures.
     String? recordsError;
     List<AttendanceRecord> records = [];
     try {
@@ -141,34 +133,35 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
     }
 
     if (!mounted) return;
-
     setState(() {
       _records = records;
       _error = recordsError;
     });
 
-    // B, C, D, E) Calculations — fetched in parallel.
-    await Future.wait([
-      _fetchCalculations(),
-      _fetchCalendarData(),
-      _fetchSubjectChartData(),
-    ]);
+    final calcResult = await _fetchCalculations();
+    final calendarResult = await _fetchCalendarData();
+    final chartResult = await _fetchSubjectChartData();
 
     if (!mounted) return;
     setState(() {
+      _overall = calcResult.$1;
+      _overallError = calcResult.$2;
+      _overallLoading = false;
+      _subjectCalcs = calcResult.$3;
+      _calendarData = calendarResult.$1 ?? <CalendarAttendance>[];
+      _calendarError = calendarResult.$2;
+      _calendarLoading = false;
+      _subjectChartData = chartResult.$1 ?? <SubjectAttendance>[];
+      _chartError = chartResult.$2;
+      _chartLoading = false;
       _loading = false;
     });
   }
 
-  /// Fetches overall and per-subject calculations, honoring the
-  /// selected date range. Uses the already-loaded [_records] for the subject
-  /// list so a date change refreshes only the calculation state — the
-  /// attendance-record retrieval is never re-triggered here.
-  Future<void> _fetchCalculations() async {
+  Future<(AttendancePercentage?, String?, Map<int, _SubjectCalc>)> _fetchCalculations() async {
     final start = _startDate;
     final end = _endDate;
 
-    // B) Overall calculation — isolated.
     AttendancePercentage? overall;
     String? overallError;
     try {
@@ -180,10 +173,6 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
       overallError = 'Something went wrong while loading your attendance summary.';
     }
 
-    if (!mounted) return;
-
-    // C) Per-subject calculations — derive real subjectIds only from records,
-    // deduplicate, and fetch in parallel. Each subject is isolated.
     final subjectIds = <int>{
       for (final r in _records)
         if (r.subjectId != null) r.subjectId!,
@@ -211,61 +200,36 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
       }
     }
 
-    if (!mounted) return;
-
-    setState(() {
-      _overall = overall;
-      _overallError = overallError;
-      _overallLoading = false;
-      _subjectCalcs = subjectCalcs;
-    });
+    return (overall, overallError, subjectCalcs);
   }
 
-  Future<void> _fetchCalendarData() async {
+  Future<(List<CalendarAttendance>?, String?)> _fetchCalendarData() async {
     try {
       final data = await widget.attendanceRepository
           .getCalendarAttendanceSummary(startDate: _startDate, endDate: _endDate);
-      if (!mounted) return;
-      setState(() {
-        _calendarData = data;
-        _calendarLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (data, null);
     } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _calendarError = _messageFor(e);
-        _calendarLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (null, _messageFor(e));
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _calendarError = 'Something went wrong while loading the calendar.';
-        _calendarLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (null, 'Something went wrong while loading the calendar.');
     }
   }
 
-  Future<void> _fetchSubjectChartData() async {
+  Future<(List<SubjectAttendance>?, String?)> _fetchSubjectChartData() async {
     try {
       final data = await widget.attendanceRepository
           .getSubjectAttendanceSummaries(startDate: _startDate, endDate: _endDate);
-      if (!mounted) return;
-      setState(() {
-        _subjectChartData = data;
-        _chartLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (data, null);
     } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _chartError = _messageFor(e);
-        _chartLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (null, _messageFor(e));
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _chartError = 'Something went wrong while loading subject data.';
-        _chartLoading = false;
-      });
+      if (!mounted) return (null, null);
+      return (null, 'Something went wrong while loading subject data.');
     }
   }
 
@@ -286,11 +250,23 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
       _chartError = null;
       _subjectChartData = [];
     });
-    await Future.wait([
-      _fetchCalculations(),
-      _fetchCalendarData(),
-      _fetchSubjectChartData(),
-    ]);
+    final calcResult = await _fetchCalculations();
+    final calendarResult = await _fetchCalendarData();
+    final chartResult = await _fetchSubjectChartData();
+
+    if (!mounted) return;
+    setState(() {
+      _overall = calcResult.$1;
+      _overallError = calcResult.$2;
+      _overallLoading = false;
+      _subjectCalcs = calcResult.$3;
+      _calendarData = calendarResult.$1 ?? <CalendarAttendance>[];
+      _calendarError = calendarResult.$2;
+      _calendarLoading = false;
+      _subjectChartData = chartResult.$1 ?? <SubjectAttendance>[];
+      _chartError = chartResult.$2;
+      _chartLoading = false;
+    });
   }
 
   Future<void> _pickStartDate() async {
@@ -344,16 +320,40 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
     _applyDates();
   }
 
+  /// Records shown in the selected-date detail panel.
+  ///
+  /// Applies the selected date, and additionally the active subject filter when
+  /// one is chosen, so the detail panel always agrees with the calendar (which
+  /// colours its day cells with the same subject scope). Purely a record
+  /// lookup - no percentage/aggregation logic lives here.
+  List<AttendanceRecord> _filterRecordsForSelectedDate() {
+    final date = _selectedDate;
+    if (date == null || date.isEmpty) return const <AttendanceRecord>[];
+    final subjectId = _selectedSubjectId;
+    return _records
+        .where((r) =>
+            r.date == date &&
+            (subjectId == null || r.subjectId == subjectId))
+        .toList();
+  }
+
   void _onDateSelected(String date) {
     setState(() {
       _selectedDate = date;
+      _selectedDateRecords =
+          date.isEmpty ? const <AttendanceRecord>[] : _filterRecordsForSelectedDate();
     });
-    if (date.isEmpty) {
-      setState(() => _selectedDateRecords = []);
-      return;
-    }
-    final records = _records.where((r) => r.date == date).toList();
-    setState(() => _selectedDateRecords = records);
+  }
+
+  void _onSubjectChanged(int? subjectId) {
+    setState(() {
+      _selectedSubjectId = subjectId;
+      // The selected date is intentionally preserved; the records for it are
+      // re-derived under the new subject so the panel stays open. When the
+      // newly selected subject has nothing on that date the panel shows the
+      // "no records" state instead of silently resetting the selection.
+      _selectedDateRecords = _filterRecordsForSelectedDate();
+    });
   }
 
   String _messageFor(ApiException e) {
@@ -365,76 +365,38 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Attendance'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Records'),
-            Tab(text: 'Calendar'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          children: [
+            _buildDateBar(),
+            _buildOverallCard(),
+            _buildSubjectFilter(),
+            if (_subjectChartData.isNotEmpty && !_chartLoading)
+              _buildSubjectChartSection(),
+            _buildCalendarSection(),
+            if (_selectedDate != null && _selectedDateRecords.isNotEmpty)
+              _buildDateDetailSection(),
+            if (_selectedDate != null && _selectedDateRecords.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: Text('No attendance records for this date')),
+              ),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+              ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: AppErrorState(message: _error!, onRetry: _load),
+              ),
+            if (_records.isEmpty && _error == null && !_loading)
+              _buildEmptyRecords(),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildRecordsView(),
-          _buildCalendarView(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecordsView() {
-    if (_loading) {
-      return const AppLoadingState(message: 'Loading your attendance...');
-    }
-    if (_error != null) {
-      return AppErrorState(message: _error!, onRetry: _load);
-    }
-
-    final grouped = <int, List<AttendanceRecord>>{};
-    for (final r in _records) {
-      final id = r.subjectId;
-      if (id == null) continue;
-      grouped.putIfAbsent(id, () => []).add(r);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        children: [
-          _buildDateBar(),
-          _buildOverallCard(),
-          if (_subjectChartData.isNotEmpty && !_chartLoading)
-            _buildSubjectChartSection(),
-          for (final entry in grouped.entries) ...[
-            _buildSubjectHeader(entry.key, entry.value),
-            for (final r in entry.value) _buildRecordTile(r),
-          ],
-          if (grouped.isEmpty && _records.isNotEmpty) ...[
-            _buildSubjectChartSection(),
-            _buildEmptyRecords(),
-          ],
-          if (_records.isEmpty) _buildEmptyRecords(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalendarView() {
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        children: [
-          _buildDateBar(),
-          _buildCalendarSection(),
-          if (_selectedDate != null && _selectedDateRecords.isNotEmpty)
-            _buildDateDetailSection(),
-          if (_selectedDate != null && _selectedDateRecords.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: Text('No attendance records for this date')),
-            ),
-        ],
       ),
     );
   }
@@ -568,55 +530,63 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
     );
   }
 
+  Widget _buildSubjectFilter() {
+    final subjectIds = _subjectCalcs.keys.toList();
+    if (subjectIds.isEmpty) return const SizedBox.shrink();
+
+    final items = <DropdownMenuItem<int?>>[
+      const DropdownMenuItem(
+        value: null,
+        child: Text('All Subjects'),
+      ),
+      ...subjectIds.map((id) {
+        final name = subjectNamesById[id] ?? 'Subject $id';
+        return DropdownMenuItem(
+          value: id,
+          child: Text(name),
+        );
+      }),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Subject Filter',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<int?>(
+                value: _selectedSubjectId,
+                items: items,
+                onChanged: _onSubjectChanged,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                isExpanded: true,
+                hint: const Text('All Subjects'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSubjectChartSection() {
     return AttendanceSubjectChart(
       subjects: _subjectChartData,
       loading: _chartLoading,
       error: _chartError,
       onRetry: _fetchSubjectChartData,
-    );
-  }
-
-  Widget _buildSubjectHeader(int subjectId, List<AttendanceRecord> records) {
-    final calc = _subjectCalcs[subjectId];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Subject $subjectId',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          if (calc == null || calc.loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (calc.error != null)
-            Text(
-              calc.error!,
-              style: const TextStyle(color: Colors.red, fontSize: 13),
-            )
-          else if (calc.data != null && calc.data!.percentage != null)
-            Text(
-              'Present: ${calc.data!.presentCount}  |  '
-              'Recorded: ${calc.data!.totalRecordedCount}  |  '
-              'Percentage: ${_formatPercentage(calc.data!.percentage!)}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            )
-          else
-            const Text('No attendance records available'),
-        ],
-      ),
     );
   }
 
@@ -628,6 +598,8 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
       onRetry: _fetchCalendarData,
       onDateSelected: _onDateSelected,
       selectedDate: _selectedDate,
+      subjectId: _selectedSubjectId,
+      allRecords: _records.isNotEmpty ? _records : null,
     );
   }
 
@@ -635,6 +607,7 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
     return AttendanceDateDetail(
       date: _selectedDate,
       records: _selectedDateRecords,
+      subjectNamesById: subjectNamesById.isNotEmpty ? subjectNamesById : null,
     );
   }
 
@@ -684,28 +657,8 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen>
         children: [
           Icon(Icons.event_busy, size: 48, color: Colors.grey),
           SizedBox(height: 16),
-          Text('No attendance records found.'),
+          Text('No attendance records found.', key: const Key('empty_records')),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRecordTile(AttendanceRecord r) {
-    final isPresent = r.isPresent == true || r.status == 'PRESENT';
-    return ListTile(
-      leading: Icon(
-        isPresent ? Icons.check_circle : Icons.cancel,
-        color: isPresent ? Colors.green : Colors.red,
-      ),
-      title: Text('Subject ${r.subjectId ?? "-"}'),
-      subtitle: Text(
-          '${r.date ?? "-"} | ${r.lecturePeriod ?? "-"} | ${r.status ?? "-"}'),
-      trailing: Text(
-        isPresent ? 'Present' : 'Absent',
-        style: TextStyle(
-          color: isPresent ? Colors.green : Colors.red,
-          fontWeight: FontWeight.bold,
-        ),
       ),
     );
   }
