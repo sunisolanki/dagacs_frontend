@@ -39,7 +39,10 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
   DateTime? _endDate;
 
   List<TeacherAssignment> _assignments = const [];
-  TeacherAssignment? _selected;
+  // Separate Subject / Section selectors, cascaded from the teacher's own
+  // assignment list (the same list the backend re-validates for authorization).
+  int? _subjectId;
+  int? _sectionId;
   bool _loadingAssignments = true;
 
   bool _loading = false;
@@ -58,6 +61,47 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
       _startDate != null &&
       _endDate != null &&
       _startDate!.isAfter(_endDate!);
+
+  /// Distinct subjects across the teacher's assignments, in stable order.
+  List<({int id, String label})> get _subjects {
+    final seen = <int, String>{};
+    for (final a in _assignments) {
+      final id = a.subjectId;
+      if (id == null) continue;
+      seen.putIfAbsent(
+          id,
+          () => '${a.subjectName ?? "Subject"}'
+              '${a.subjectCode == null ? "" : " (${a.subjectCode})"}');
+    }
+    final entries = seen.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    return [for (final e in entries) (id: e.key, label: e.value)];
+  }
+
+  /// Distinct classes within the selected subject.
+  List<({int id, int? batchId, String label})> get _sections {
+    if (_subjectId == null) return const [];
+    final seen = <int, ({int? batchId, String label})>{};
+    for (final a in _assignments) {
+      if (a.subjectId != _subjectId) continue;
+      final isSection = a.sectionId != null;
+      final key = isSection ? a.sectionId! : (a.batchId ?? -1);
+      final klass = isSection
+          ? '${a.sectionName ?? "Section"}'
+              '${a.sectionCode == null ? "" : " (${a.sectionCode})"}'
+          : 'Batch ${a.batchCode ?? "-"}';
+      seen.putIfAbsent(key, () => (batchId: isSection ? null : a.batchId, label: klass));
+    }
+    final entries = seen.entries.toList()
+      ..sort((a, b) => a.value.label.compareTo(b.value.label));
+    return [
+      for (final e in entries)
+        (id: e.key, batchId: e.value.batchId, label: e.value.label)
+    ];
+  }
+
+  bool get _canGenerate =>
+      _subjectId != null && _sectionId != null && !_datesInvalid && !_loading;
 
   Future<void> _loadAssignments() async {
     setState(() {
@@ -88,8 +132,9 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
   }
 
   Future<void> _load() async {
-    final assignment = _selected;
-    if (assignment == null) return;
+    final subjectId = _subjectId;
+    final sectionId = _sectionId;
+    if (subjectId == null || sectionId == null) return;
     if (_datesInvalid) return;
     setState(() {
       _loading = true;
@@ -97,9 +142,8 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
     });
     try {
       final report = await widget.reportRepository.getStudentWiseReport(
-        subjectId: assignment.subjectId!,
-        sectionId: assignment.sectionId,
-        batchId: assignment.batchId,
+        subjectId: subjectId,
+        sectionId: sectionId,
         startDate: _startDate,
         endDate: _endDate,
       );
@@ -124,8 +168,9 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
   }
 
   Future<void> _export(String format) async {
-    final assignment = _selected;
-    if (assignment == null) return;
+    final subjectId = _subjectId;
+    final sectionId = _sectionId;
+    if (subjectId == null || sectionId == null) return;
     if (_exporting) return;
     if (_datesInvalid) {
       _showSnack('Start date must not be after end date.');
@@ -135,9 +180,8 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
     try {
       final payload = await widget.reportRepository.exportStudentWiseReport(
         format,
-        subjectId: assignment.subjectId!,
-        sectionId: assignment.sectionId,
-        batchId: assignment.batchId,
+        subjectId: subjectId,
+        sectionId: sectionId,
         startDate: _startDate,
         endDate: _endDate,
       );
@@ -162,21 +206,22 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _assignmentLabel(TeacherAssignment a) {
-    final subject = '${a.subjectName ?? ''} (${a.subjectCode ?? ''})'.trim();
-    final klass = a.sectionName != null
-        ? a.sectionName!
-        : a.batchCode ?? '';
-    return '$subject - $klass';
-  }
-
-  void _onChanged(TeacherAssignment? value) {
+  void _onSubjectChanged(int? subjectId) {
     setState(() {
-      _selected = value;
+      _subjectId = subjectId;
+      // Changing subject invalidates the class and the previous report.
+      _sectionId = null;
       _report = null;
       _error = null;
     });
-    if (value != null) _load();
+  }
+
+  void _onSectionChanged(int? sectionId) {
+    setState(() {
+      _sectionId = sectionId;
+      _report = null;
+      _error = null;
+    });
   }
 
   @override
@@ -211,7 +256,7 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
                   ),
                 ),
               ),
-            if (_selected != null)
+            if (_subjectId != null && _sectionId != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ReportExportButtons(
@@ -240,19 +285,67 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
       return const ReportEmptyState(
           message: 'You have no teaching assignments to report on.');
     }
-    return DropdownButtonFormField<TeacherAssignment>(
-      key: const Key('student-wise-assignment'),
-      value: _selected,
-      isExpanded: true,
-      decoration: const InputDecoration(
-        labelText: 'Class (subject - section / batch)',
-        border: OutlineInputBorder(),
-      ),
-      items: [
-        for (final a in _assignments)
-          DropdownMenuItem(value: a, child: Text(_assignmentLabel(a))),
+
+    final sections = _sections;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                key: const Key('register-subject'),
+                value: _subjectId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Subject',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final s in _subjects)
+                    DropdownMenuItem(value: s.id, child: Text(s.label)),
+                ],
+                onChanged: _onSubjectChanged,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                key: const Key('register-section'),
+                value: _sectionId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Section',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  for (final s in sections)
+                    DropdownMenuItem(value: s.id, child: Text(s.label)),
+                ],
+                onChanged: _subjectId == null ? null : _onSectionChanged,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // One explicit action instead of a request per dropdown change.
+        // ElevatedButton (the same pattern My Classes uses) so it can render a
+        // genuinely disabled state until a subject and section are chosen.
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            key: const Key('register-generate'),
+            onPressed: _canGenerate ? () => _load() : null,
+            icon: _loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.assessment_outlined, size: 18),
+            label: const Text('Generate Report'),
+          ),
+        ),
       ],
-      onChanged: _onChanged,
     );
   }
 
@@ -304,9 +397,13 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
     if (_error != null) {
       return ReportErrorState(message: _error!, onRetry: _load);
     }
-    if (_selected == null) {
+    if (_subjectId == null || _sectionId == null) {
       return const ReportEmptyState(
-          message: 'Select a class to load its student-wise register.');
+          message: 'Select a subject and section, then generate the report.');
+    }
+    if (_report == null && !_loading) {
+      return const ReportEmptyState(
+          message: 'Tap Generate Report to load the student-wise register.');
     }
     final report = _report;
     if (report == null || report.rows.isEmpty) {
@@ -338,7 +435,7 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
                 style: const TextStyle(fontSize: 11)),
           ),
         const DataColumn(label: Text('Present')),
-        const DataColumn(label: Text('Total')),
+        const DataColumn(label: Text('Total Classes')),
         const DataColumn(label: Text('%')),
       ],
       rows: [
@@ -350,7 +447,7 @@ class _StudentWiseReportScreenState extends State<StudentWiseReportScreen> {
               DataCell(_cellWidget(row.cellStatus(col.sessionId))),
             DataCell(Text('${row.presentCount}')),
             DataCell(Text('${row.totalRecordedCount}')),
-            DataCell(Text(formatReportPercentage(row.percentage),
+            DataCell(Text(formatRegisterPercentage(row.percentage),
                 style: const TextStyle(fontWeight: FontWeight.bold))),
           ]),
       ],

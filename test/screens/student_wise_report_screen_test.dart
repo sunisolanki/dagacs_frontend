@@ -95,6 +95,23 @@ Widget _wrap(_FakeReportRepository reports, _FakeTeacherRepository teachers,
   );
 }
 
+/// Drives the separate Subject -> Section selectors and the explicit Generate
+/// action, replacing the former combined "Class" dropdown.
+Future<void> _selectAndGenerate(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('register-subject')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Data Structures (DS)').last);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(const Key('register-section')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('CSE-A (A)').last);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.byKey(const Key('register-generate')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('loads assignments, selects a class and renders the matrix',
       (tester) async {
@@ -105,12 +122,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Student-Wise Register'), findsOneWidget);
+    // Nothing is fetched until the teacher picks a class and generates.
     expect(reports.matrixCalls, isEmpty);
+    expect(find.textContaining('Select a subject and section'), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('student-wise-assignment')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Data Structures (DS) - CSE-A').last);
-    await tester.pumpAndSettle();
+    await _selectAndGenerate(tester);
 
     expect(reports.matrixCalls.single.subjectId, 100);
     expect(reports.matrixCalls.single.sectionId, 200);
@@ -118,7 +134,8 @@ void main() {
 
     expect(find.text('ENG-0001'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('50%'), findsOneWidget);
+    // Register percentages render to two decimals.
+    expect(find.text('50.00%'), findsOneWidget);
     expect(find.textContaining('LP1'), findsOneWidget);
     expect(find.textContaining('LP2'), findsOneWidget);
   });
@@ -138,10 +155,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('student-wise-assignment')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Data Structures (DS) - CSE-A').last);
-    await tester.pumpAndSettle();
+    await _selectAndGenerate(tester);
 
     await tester.tap(find.byKey(const Key('export-excel')));
     await tester.pumpAndSettle();

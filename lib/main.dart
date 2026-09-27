@@ -113,7 +113,9 @@ class DAGACSApp extends StatelessWidget {
                     // parameter is nullable so a host without the repository
                     // simply falls back to the plain tile list.
                     attendanceRepository:
-                        AppDependencies.attendanceRepository));
+                        AppDependencies.attendanceRepository,
+                    // Teacher home renders the data-backed teacher dashboard.
+                    teacherRepository: AppDependencies.teacherRepository));
           case AppRoutes.masterData:
             return MaterialPageRoute(
                 builder: (_) => MasterDataScreen(

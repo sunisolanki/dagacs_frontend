@@ -182,3 +182,11 @@ String formatReportPercentage(double? value) {
       text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
   return '$trimmed%';
 }
+
+/// Two-decimal percentage for the student-wise attendance register.
+///
+/// Deliberately separate from [formatReportPercentage], which stays the shared
+/// HOD/teacher report formatter: a register must never expose raw floating
+/// point precision such as `64.28571428571429%`.
+String formatRegisterPercentage(double? value) =>
+    value == null ? 'No data' : '${value.toStringAsFixed(2)}%';

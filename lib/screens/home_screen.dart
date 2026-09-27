@@ -8,6 +8,8 @@ import '../repositories/attendance_repository.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/dagacs_widgets.dart';
 import '../widgets/student_dashboard.dart';
+import '../widgets/teacher_dashboard.dart';
+import '../repositories/teacher_repository.dart';
 
 /// Authenticated home. Role-aware welcome plus navigation into each role's
 /// modules (unchanged routes, tiles and role gating).
@@ -17,11 +19,17 @@ class HomeScreen extends StatelessWidget {
     required this.session,
     required this.masterDataRepository,
     this.attendanceRepository,
+    this.teacherRepository,
   });
 
   final SessionController session;
   final MasterDataRepository masterDataRepository;
   final AttendanceRepository? attendanceRepository;
+
+  /// Optional: when provided, a TEACHER home renders the data-backed teacher
+  /// dashboard. Null keeps the plain tile list for callers that do not wire the
+  /// teacher repositories.
+  final TeacherRepository? teacherRepository;
 
   /// Lets the host scroll view drive the embedded student dashboard's reload
   /// (pull-to-refresh) without making this widget stateful.
@@ -30,6 +38,11 @@ class HomeScreen extends StatelessWidget {
 
   bool get _showsDashboard =>
       session.role == 'STUDENT' && attendanceRepository != null;
+
+  bool get _showsTeacherDashboard =>
+      session.role == 'TEACHER' &&
+      teacherRepository != null &&
+      attendanceRepository != null;
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +82,17 @@ class HomeScreen extends StatelessWidget {
                         child: _buildAttendanceSummary(context),
                       ),
                     ],
+                    if (_showsTeacherDashboard) ...[
+                      const SizedBox(height: DagacsSpace.lg),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: DagacsSpace.lg),
+                        child: TeacherDashboard(
+                          teacherRepository: teacherRepository!,
+                          attendanceRepository: attendanceRepository!,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: DagacsSpace.xl),
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -90,13 +114,14 @@ class HomeScreen extends StatelessWidget {
           );
           // The dashboard is a non-scrolling section, so pull-to-refresh is
           // owned by this host view and forwarded to it.
-          return _showsDashboard
-              ? RefreshIndicator(
-                  onRefresh: () async =>
-                      _dashboardKey.currentState?.reload(),
-                  child: content,
-                )
-              : content;
+          // The embedded dashboards are non-scrolling sections, so
+          // pull-to-refresh is owned by this host view and forwarded on.
+          if (_showsDashboard || _showsTeacherDashboard)
+            return RefreshIndicator(
+              onRefresh: () async => _dashboardKey.currentState?.reload(),
+              child: content,
+            );
+          return content;
         },
       ),
     );
