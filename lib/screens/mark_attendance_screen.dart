@@ -9,6 +9,10 @@ import '../repositories/attendance_repository.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../widgets/dagacs_widgets.dart';
 
+/// Tri-state of the "Select All" control, mirroring how a partially marked
+/// roster should read.
+enum SelectAllState { all, some, none }
+
 /// Screen for marking or updating attendance for a single session.
 ///
 /// Students without an existing record start as UNMARKED (local UI state).
@@ -160,6 +164,71 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
       default:
         return Icons.help_outline;
     }
+  }
+
+  // ── Derived roster metrics ──────────────────────────────────────────────
+  // Counters are computed over the *markable* roster, never the raw row count.
+  // A student without an id is skipped by _submit (`if (sid == null) continue;`)
+  // and its toggle is disabled, so it must not be reported as Unmarked. Because
+  // all three buckets filter on `s.id != null`, they partition one set and
+  // present + absent + unmarked == _markableCount holds by construction.
+
+  /// Students that can actually receive a mark.
+  int get _markableCount => _students.where((s) => s.id != null).length;
+
+  int get _presentCount => _students
+      .where((s) => s.id != null && _statusMap[s.id] == 'PRESENT')
+      .length;
+
+  int get _absentCount => _students
+      .where((s) => s.id != null && _statusMap[s.id] == 'ABSENT')
+      .length;
+
+  int get _unmarkedCount => _markableCount - _presentCount - _absentCount;
+
+  bool get _allMarkedPresent =>
+      _markableCount > 0 && _presentCount == _markableCount;
+
+  bool get _noneMarkedPresent => _presentCount == 0;
+
+  /// Tri-state so a partially marked roster is visible in the control itself.
+  SelectAllState get _selectAllState {
+    if (_allMarkedPresent) return SelectAllState.all;
+    if (_noneMarkedPresent) return SelectAllState.none;
+    return SelectAllState.some;
+  }
+
+  /// Bulk Present/Restore.
+  ///
+  /// Selecting is monotonic: it only ever adds a PRESENT mark. Deselecting does
+  /// NOT clear the roster to Unmarked - that would combine with _submit's
+  /// `_statusMap[sid] ?? 'ABSENT'` and silently rewrite a persisted Present
+  /// roster to Absent. Instead it restores the backend-confirmed baseline held
+  /// in _persistedStatusMap, so every student's effective submit status after
+  /// a select/deselect round trip is identical to before it.
+  void _toggleSelectAll() {
+    if (_submitting) return;
+    setState(() {
+      if (_allMarkedPresent) {
+        for (final student in _students) {
+          final sid = student.id;
+          if (sid == null) continue;
+          final persisted = _persistedStatusMap[sid];
+          if (persisted != null) {
+            _statusMap[sid] = persisted;
+          } else {
+            // No confirmed record: back to Unmarked, which _submit resolves to
+            // ABSENT exactly as it does today.
+            _statusMap.remove(sid);
+          }
+        }
+      } else {
+        for (final student in _students) {
+          final sid = student.id;
+          if (sid != null) _statusMap[sid] = 'PRESENT';
+        }
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -317,81 +386,306 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen> {
     }
     return Column(
       children: [
+        _buildSummaryHeader(),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
             child: ListView.builder(
               itemCount: _students.length,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: DagacsSpace.lg, vertical: DagacsSpace.md),
+              padding: const EdgeInsets.fromLTRB(
+                DagacsSpace.lg,
+                DagacsSpace.xs,
+                DagacsSpace.lg,
+                // Reserve room for the sticky footer so the last row is never
+                // hidden behind it.
+                96,
+              ),
               itemBuilder: (context, index) {
-                final student = _students[index];
-                final studentId = student.id;
-                final status =
-                    studentId != null ? _statusMap[studentId] : null;
-
                 return Padding(
                   padding: const EdgeInsets.only(bottom: DagacsSpace.sm),
-                  child: AppCard(
-                    child: Row(
-                      children: [
-                        AppIconBadge(
-                          icon: _statusIcon(status),
-                          color: status == 'ABSENT'
-                              ? DagacsColors.error
-                              : status == 'PRESENT'
-                                  ? DagacsColors.success
-                                  : DagacsColors.textSecondary,
-                          backgroundColor: status == 'ABSENT'
-                              ? DagacsColors.errorBg
-                              : status == 'PRESENT'
-                                  ? DagacsColors.successBg
-                                  : DagacsColors.surfaceAlt,
-                        ),
-                        const SizedBox(width: DagacsSpace.lg),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(student.name ?? 'Unknown',
-                                  style: Theme.of(context).textTheme.titleSmall),
-                              const SizedBox(height: DagacsSpace.xs),
-                              Text(
-                                [
-                                  if (student.enrollmentNumber != null &&
-                                      student.enrollmentNumber!.isNotEmpty)
-                                    'Enroll: ${student.enrollmentNumber}',
-                                  if (student.rollNumber != null &&
-                                      student.rollNumber!.isNotEmpty)
-                                    'Roll: ${student.rollNumber}',
-                                ].join(' · '),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Semantics(
-                          button: true,
-                          label: 'Change ${student.name ?? 'student'} attendance status',
-                          child: TextButton(
-                            onPressed: studentId != null && !_submitting
-                                ? () => _toggleStatus(studentId)
-                                : null,
-                            child: AppStatusBadge(
-                              label: _statusLabel(status),
-                              active: status == 'PRESENT',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: _buildStudentTile(_students[index]),
                 );
               },
             ),
           ),
         ),
+        _buildStickyFooter(),
       ],
+    );
+  }
+
+  /// Compact metrics strip: roster size, live Present/Absent/Unmarked counts
+  /// and the bulk Select All control.
+  Widget _buildSummaryHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+          DagacsSpace.lg, DagacsSpace.md, DagacsSpace.lg, DagacsSpace.md),
+      decoration: const BoxDecoration(
+        color: DagacsColors.surface,
+        border: Border(
+          bottom: BorderSide(color: DagacsColors.border, width: 1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Flexible so the roster label yields space to the Select All
+              // control on narrow phones instead of overflowing.
+              Expanded(
+                child: Text(
+                  '$_markableCount ${_markableCount == 1 ? 'Student' : 'Students'}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              const SizedBox(width: DagacsSpace.sm),
+              _buildSelectAllControl(),
+            ],
+          ),
+          const SizedBox(height: DagacsSpace.md),
+          _buildCounters(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectAllControl() {
+    final state = _selectAllState;
+    final enabled = !_submitting;
+    return Semantics(
+      button: true,
+      checked: state == SelectAllState.all,
+      mixed: state == SelectAllState.some,
+      label: 'Select All',
+      child: InkWell(
+        onTap: enabled ? _toggleSelectAll : null,
+        borderRadius: BorderRadius.circular(DagacsRadius.pill),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: DagacsSpace.sm, vertical: DagacsSpace.xs),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: Checkbox(
+                  tristate: true,
+                  value: state == SelectAllState.all
+                      ? true
+                      : state == SelectAllState.none
+                          ? false
+                          : null,
+                  onChanged: enabled
+                      ? (_) => _toggleSelectAll()
+                      : null,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: DagacsSpace.xs),
+              Text(
+                'Select All',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: enabled
+                      ? DagacsColors.textPrimary
+                      : DagacsColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCounters() {
+    return Row(
+      children: [
+        _buildCounterChip('Present', _presentCount, DagacsColors.success),
+        const SizedBox(width: DagacsSpace.sm),
+        _buildCounterChip('Absent', _absentCount, DagacsColors.error),
+        const SizedBox(width: DagacsSpace.sm),
+        _buildCounterChip('Unmarked', _unmarkedCount, DagacsColors.warning),
+      ],
+    );
+  }
+
+  Widget _buildCounterChip(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            vertical: DagacsSpace.sm, horizontal: DagacsSpace.md),
+        decoration: BoxDecoration(
+          color: DagacsColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(DagacsRadius.sm),
+        ),
+        // Rendered as ONE text ("Present 38") rather than a bare label plus a
+        // separate count. The per-student status badge owns the exact strings
+        // "Present"/"Absent"/"Unmarked", and existing tests match on those exact
+        // strings, so the counters must never emit a duplicate bare label.
+        // FittedBox keeps the longest label ("Unmarked") from overflowing on
+        // narrow phones; it is a no-op at every comfortable width.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: DagacsColors.textSecondary,
+                  ),
+                ),
+                TextSpan(
+                  text: '  $count',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            maxLines: 1,
+            softWrap: false,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Sticky action bar. Both this and the AppBar SUBMIT call the same
+  /// existing _submit(); there is exactly one submission path.
+  Widget _buildStickyFooter() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+          DagacsSpace.lg, DagacsSpace.md, DagacsSpace.lg, DagacsSpace.md),
+      decoration: const BoxDecoration(
+        color: DagacsColors.surface,
+        border: Border(
+          top: BorderSide(color: DagacsColors.border, width: 1),
+        ),
+        boxShadow: DagacsColors.cardShadow,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final button = SizedBox(
+            width: double.infinity,
+            child: AppPrimaryButton(
+              loading: _submitting,
+              onPressed: _submit,
+              child: const Text('Submit Attendance'),
+            ),
+          );
+          // Narrow phones cannot fit the counters and the action side by side,
+          // so the action drops to its own full-width row instead of clipping.
+          if (constraints.maxWidth < 380) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildCounters(),
+                const SizedBox(height: DagacsSpace.md),
+                button,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: _buildCounters()),
+              const SizedBox(width: DagacsSpace.lg),
+              SizedBox(width: 176, child: button),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// One student row. The status badge stays the interactive 3-state control
+  /// (UNMARKED -> PRESENT -> ABSENT -> UNMARKED) via the existing
+  /// _toggleStatus; only the presentation and the secondary line change.
+  Widget _buildStudentTile(SessionStudent student) {
+    final studentId = student.id;
+    final markable = studentId != null;
+    final status = markable ? _statusMap[studentId] : null;
+    final color = status == 'ABSENT'
+        ? DagacsColors.error
+        : status == 'PRESENT'
+            ? DagacsColors.success
+            : DagacsColors.textSecondary;
+    final background = status == 'ABSENT'
+        ? DagacsColors.errorBg
+        : status == 'PRESENT'
+            ? DagacsColors.successBg
+            : DagacsColors.surfaceAlt;
+
+    final enrollment = (student.enrollmentNumber ?? '').trim();
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+          vertical: DagacsSpace.md, horizontal: DagacsSpace.md),
+      child: Row(
+        children: [
+          AppIconBadge(
+            icon: _statusIcon(status),
+            color: color,
+            backgroundColor: background,
+          ),
+          const SizedBox(width: DagacsSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.name ?? 'Unknown',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  // Enrollment only. Roll number stays in the model/API and is
+                  // simply not shown in this list.
+                  'Enrollment: ${enrollment.isEmpty ? '-' : enrollment}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: DagacsSpace.sm),
+          Semantics(
+            button: true,
+            label: 'Change ${student.name ?? 'student'} attendance status',
+            child: TextButton(
+              onPressed: markable && !_submitting
+                  ? () => _toggleStatus(studentId)
+                  : null,
+              child: AppStatusBadge(
+                label: _statusLabel(status),
+                active: status == 'PRESENT',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
