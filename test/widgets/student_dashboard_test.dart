@@ -3,31 +3,41 @@ import 'package:dagacs_frontend/models/attendance_record.dart';
 import 'package:dagacs_frontend/models/calendar_attendance.dart';
 import 'package:dagacs_frontend/models/subject_attendance.dart';
 import 'package:dagacs_frontend/repositories/attendance_repository.dart';
-import 'package:dagacs_frontend/widgets/attendance_subject_chart.dart';
 import 'package:dagacs_frontend/widgets/attendance_summary_cards.dart';
 import 'package:dagacs_frontend/widgets/recent_attendance_list.dart';
 import 'package:dagacs_frontend/widgets/student_dashboard.dart';
+import 'package:dagacs_frontend/widgets/subject_attendance_bars.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Records served by `getMyAttendance()`. Recent Attendance is built from
 /// these, so they must be visually distinguishable from anything the
-/// calendar-summary endpoint could contribute.
-const _myRecords = [
+/// calendar-summary endpoint could contribute. Dates are relative to today so
+/// the day grouping renders deterministic TODAY / YESTERDAY headers.
+String _iso(DateTime d) =>
+    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+DateTime _day(int daysAgo) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day)
+      .subtract(Duration(days: daysAgo));
+}
+
+late final List<AttendanceRecord> _myRecords = [
   AttendanceRecord(
       id: 1,
       subjectId: 5,
       status: 'PRESENT',
       isPresent: true,
-      date: '2026-09-21',
+      date: _iso(_day(1)),
       lecturePeriod: '1st'),
   AttendanceRecord(
       id: 2,
       subjectId: 6,
       status: 'ABSENT',
       isPresent: false,
-      date: '2026-09-22',
+      date: _iso(_day(0)),
       lecturePeriod: '2nd'),
 ];
 
@@ -148,26 +158,42 @@ void main() {
           findsOneWidget);
       expect(find.descendant(of: summary, matching: find.text('10')),
           findsOneWidget);
-
-      // The donut percentages are painted by fl_chart rather than emitted as
-      // Text widgets, so assert the chart data the user actually sees.
-      final pie = tester.widget<PieChart>(find.byType(PieChart));
-      final titles = pie.data.sections.map((s) => s.title).toList();
-      expect(titles, contains('80%'));
-      expect(titles, contains('20%'));
+      // The compact hero shows the backend percentage and the ratio line.
+      expect(find.descendant(of: summary, matching: find.text('80%')),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: summary, matching: find.text('8 / 10 classes attended')),
+          findsOneWidget);
+      // No donut is rendered on the dashboard.
+      expect(find.descendant(of: summary, matching: find.byType(PieChart)),
+          findsNothing);
     });
 
-    testWidgets('subject-wise attendance chart renders', (tester) async {
+    testWidgets('subject-wise attendance bars render', (tester) async {
       _useTallViewport(tester);
       await tester.pumpWidget(_dashboard(_populatedRepo()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AttendanceSubjectChart), findsOneWidget);
+      expect(find.byType(SubjectAttendanceBars), findsOneWidget);
       expect(find.text('Subject Attendance'), findsOneWidget);
-      expect(find.text('Database Systems'), findsOneWidget);
-      expect(find.text('Operating Systems'), findsOneWidget);
-      expect(find.text('8/10'), findsOneWidget);
-      expect(find.text('7/10'), findsOneWidget);
+
+      // Subject names also appear in Recent Attendance, so scope to the bars.
+      final bars = find.byType(SubjectAttendanceBars);
+      expect(
+          find.descendant(of: bars, matching: find.text('Database Systems')),
+          findsOneWidget);
+      expect(
+          find.descendant(of: bars, matching: find.text('Operating Systems')),
+          findsOneWidget);
+      expect(find.descendant(of: bars, matching: find.text('8/10')),
+          findsOneWidget);
+      expect(find.descendant(of: bars, matching: find.text('7/10')),
+          findsOneWidget);
+      expect(find.descendant(of: bars, matching: find.text('80%')),
+          findsOneWidget);
+      expect(find.descendant(of: bars, matching: find.text('70%')),
+          findsOneWidget);
     });
 
     testWidgets('Recent Attendance renders record status per entry',
@@ -200,9 +226,17 @@ void main() {
       expect(repo.calendarSummaryCalls, 0,
           reason: 'the dashboard must not use the calendar summary endpoint');
 
-      // Each getMyAttendance() record surfaces as its own dated row.
-      expect(find.text('22 Sep 2026 — Operating Systems'), findsOneWidget);
-      expect(find.text('21 Sep 2026 — Database Systems'), findsOneWidget);
+      // Each getMyAttendance() record surfaces under its own day group.
+      expect(find.text('TODAY'), findsOneWidget);
+      expect(find.text('YESTERDAY'), findsOneWidget);
+      expect(
+          find.descendant(of: find.byType(RecentAttendanceList),
+              matching: find.text('Operating Systems')),
+          findsOneWidget);
+      expect(
+          find.descendant(of: find.byType(RecentAttendanceList),
+              matching: find.text('Database Systems')),
+          findsOneWidget);
     });
 
     testWidgets('subject names are resolved through subjectNamesById',
@@ -212,23 +246,18 @@ void main() {
       await tester.pumpAndSettle();
 
       final recent = find.byType(RecentAttendanceList);
-      // Each row renders "<date> — <resolved subject name>", never the raw id.
+      // Rendered from the name, never the raw subject id.
       expect(
           find.descendant(
-              of: recent, matching: find.text('21 Sep 2026 — Database Systems')),
+              of: recent, matching: find.text('Database Systems')),
           findsOneWidget);
       expect(
           find.descendant(
-              of: recent,
-              matching: find.text('22 Sep 2026 — Operating Systems')),
+              of: recent, matching: find.text('Operating Systems')),
           findsOneWidget);
-      expect(
-          find.descendant(
-              of: recent, matching: find.textContaining('Subject 5')),
+      expect(find.descendant(of: recent, matching: find.text('Subject 5')),
           findsNothing);
-      expect(
-          find.descendant(
-              of: recent, matching: find.textContaining('Subject 6')),
+      expect(find.descendant(of: recent, matching: find.text('Subject 6')),
           findsNothing);
     });
 
@@ -253,14 +282,31 @@ void main() {
     });
 
     testWidgets('loading state precedes the dashboard content', (tester) async {
-      final repo = _FakeAttendanceRepository();
+      final repo = _FakeAttendanceRepository()..records = const [];
       await tester.pumpWidget(_dashboard(repo));
 
+      // Nothing is shown while the requests are in flight.
       expect(find.byType(AttendanceSummaryCards), findsNothing);
       expect(find.byType(RecentAttendanceList), findsNothing);
+      expect(find.text('Loading attendance summary...'), findsOneWidget);
 
       await tester.pumpAndSettle();
+
+      // Resolved: with no recorded data the dashboard shows its empty state.
+      expect(find.text('Loading attendance summary...'), findsNothing);
+      expect(find.text('No attendance records yet'), findsOneWidget);
+    });
+
+    testWidgets('content appears once loading completes', (tester) async {
+      _useTallViewport(tester);
+      await tester.pumpWidget(_dashboard(_populatedRepo()));
+      expect(find.text('Loading attendance summary...'), findsOneWidget);
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Loading attendance summary...'), findsNothing);
       expect(find.byType(AttendanceSummaryCards), findsOneWidget);
+      expect(find.text('80%'), findsWidgets);
     });
   });
 }

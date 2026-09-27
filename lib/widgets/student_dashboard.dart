@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/attendance_percentage.dart';
 import '../models/subject_attendance.dart';
 import '../models/attendance_record.dart';
+import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
 import '../core/navigation/navigator.dart';
 import '../core/theme/dagacs_theme.dart';
@@ -25,10 +26,10 @@ class StudentDashboard extends StatefulWidget {
   final AttendanceRepository attendanceRepository;
 
   @override
-  State<StudentDashboard> createState() => _StudentDashboardState();
+  State<StudentDashboard> createState() => StudentDashboardState();
 }
 
-class _StudentDashboardState extends State<StudentDashboard> {
+class StudentDashboardState extends State<StudentDashboard> {
   bool _loading = true;
   String? _error;
   AttendancePercentage? _overall;
@@ -39,6 +40,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   bool _subjectsLoading = true;
   String? _subjectsError;
   bool _recordsLoading = true;
+  String? _recordsError;
 
   Map<int, String> get subjectNamesById {
     return {
@@ -52,6 +54,19 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _load();
   }
 
+  /// Runs [call], converting any failure into an error string so a single
+  /// failing endpoint can never take down the whole dashboard (or leave the
+  /// page spinning forever).
+  Future<({T? data, String? error})> _guard<T>(Future<T> Function() call) async {
+    try {
+      return (data: await call(), error: null);
+    } on ApiException catch (e) {
+      return (data: null, error: userMessageFor(e));
+    } catch (_) {
+      return (data: null, error: 'Something went wrong. Please try again.');
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -61,48 +76,35 @@ class _StudentDashboardState extends State<StudentDashboard> {
       _subjectsLoading = true;
       _subjectsError = null;
       _recordsLoading = true;
+      _recordsError = null;
     });
 
-    Future<AttendancePercentage?> overallFuture;
-    Future<List<SubjectAttendance>> subjectsFuture;
-    Future<List<AttendanceRecord>> recordsFuture;
+    // Three existing student-scoped endpoints. The futures are created first so
+    // all three run concurrently, then awaited individually to keep each
+    // result strongly typed.
+    final overallFuture =
+        _guard(widget.attendanceRepository.getOverallAttendanceCalculation);
+    final subjectsFuture =
+        _guard(widget.attendanceRepository.getSubjectAttendanceSummaries);
+    final recordsFuture = _guard(widget.attendanceRepository.getMyAttendance);
 
-    try {
-      overallFuture = widget.attendanceRepository.getOverallAttendanceCalculation();
-    } catch (_) {
-      overallFuture = Future.value(null);
-    }
-
-    try {
-      subjectsFuture = widget.attendanceRepository.getSubjectAttendanceSummaries();
-    } catch (_) {
-      subjectsFuture = Future.value([]);
-    }
-
-    try {
-      recordsFuture = widget.attendanceRepository.getMyAttendance();
-    } catch (_) {
-      recordsFuture = Future.value([]);
-    }
-
-    final results = await Future.wait([
-      overallFuture,
-      subjectsFuture,
-      recordsFuture,
-    ]);
+    final overall = await overallFuture;
+    final subjects = await subjectsFuture;
+    final records = await recordsFuture;
 
     if (!mounted) return;
 
     setState(() {
-      _overall = results[0] as AttendancePercentage?;
+      _overall = overall.data;
+      _overallError = overall.error;
       _overallLoading = false;
-      _overallError = null;
 
-      _subjects = results[1] as List<SubjectAttendance>;
+      _subjects = subjects.data ?? const [];
+      _subjectsError = subjects.error;
       _subjectsLoading = false;
-      _subjectsError = null;
 
-      _records = results[2] as List<AttendanceRecord>;
+      _records = records.data ?? const [];
+      _recordsError = records.error;
       _recordsLoading = false;
 
       _loading = false;
@@ -133,7 +135,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
     // Nothing recorded at all: one clean empty state rather than three empty
     // sections, and the CTA to the full view stays reachable.
-    if (_overall == null && _subjects.isEmpty && _records.isEmpty) {
+    if (!_hasAnyAttendance) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: DagacsSpace.lg),
         child: Column(
@@ -159,24 +161,32 @@ class _StudentDashboardState extends State<StudentDashboard> {
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-            DagacsSpace.lg, 0, DagacsSpace.lg, DagacsSpace.xl),
-        children: [
-          // 1. Overall attendance hero - the dominant signal.
-          _Reveal(index: 0, child: _buildOverallSection()),
-          const SizedBox(height: DagacsSpace.md),
-          // 2. Subject-wise attendance.
-          _Reveal(index: 1, child: _buildSubjectSection()),
-          const SizedBox(height: DagacsSpace.md),
-          // 3. Recent attendance.
-          _Reveal(index: 2, child: _buildRecentSection()),
-        ],
-      ),
+    // Deliberately NOT scrollable: this widget is embedded in the home screen's
+    // own ListView, and a nested viewport would be given unbounded height.
+    // The host supplies the scrolling and the pull-to-refresh.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. Overall attendance hero - the dominant signal.
+        _Reveal(index: 0, child: _buildOverallSection()),
+        const SizedBox(height: DagacsSpace.md),
+        // 2. Subject-wise attendance.
+        _Reveal(index: 1, child: _buildSubjectSection()),
+        const SizedBox(height: DagacsSpace.md),
+        // 3. Recent attendance.
+        _Reveal(index: 2, child: _buildRecentSection()),
+      ],
     );
   }
+
+  /// True when the backend reported any recorded attendance. A null
+  /// `percentage` means "nothing recorded" and must never be shown as 0%.
+  bool get _hasAnyAttendance =>
+      _overall?.percentage != null || _subjects.isNotEmpty || _records.isNotEmpty;
+
+  /// Reloads the dashboard; used by the host's pull-to-refresh.
+  Future<void> reload() => _load();
 
   Widget _buildOverallSection() {
     if (_overallLoading) {
@@ -197,7 +207,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
         ),
       );
     }
-    if (_overall == null) {
+    if (_overall?.percentage == null) {
       return _SectionShell(
         title: 'Overall Attendance',
         icon: Icons.insights_outlined,
@@ -248,6 +258,21 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Widget _buildRecentSection() {
     if (_recordsLoading) {
       return const _SectionSkeleton(lines: 3);
+    }
+    if (_recordsError != null) {
+      return _SectionShell(
+        title: 'Recent Attendance',
+        icon: Icons.history,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_recordsError!,
+                style: const TextStyle(color: DagacsColors.error)),
+            const SizedBox(height: DagacsSpace.sm),
+            OutlinedButton(onPressed: _retry, child: const Text('Retry')),
+          ],
+        ),
+      );
     }
     if (_records.isEmpty) {
       return _SectionShell(

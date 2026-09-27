@@ -1,4 +1,11 @@
 import 'package:dagacs_frontend/core/session/session_controller.dart';
+import 'package:dagacs_frontend/models/attendance_percentage.dart';
+import 'package:dagacs_frontend/models/attendance_record.dart';
+import 'package:dagacs_frontend/models/subject_attendance.dart';
+import 'package:dagacs_frontend/repositories/attendance_repository.dart';
+import 'package:dagacs_frontend/widgets/recent_attendance_list.dart';
+import 'package:dagacs_frontend/widgets/student_dashboard.dart';
+import 'package:dagacs_frontend/widgets/subject_attendance_bars.dart';
 import 'package:dagacs_frontend/models/academic_session.dart';
 import 'package:dagacs_frontend/models/auth_response.dart';
 import 'package:dagacs_frontend/models/batch.dart';
@@ -164,6 +171,62 @@ Widget _home(String role) {
   );
 }
 
+/// Student home with a live attendance repository, so the dashboard is part of
+/// the layout being measured for overflow.
+Widget _studentHome() {
+  return MaterialApp(
+    home: HomeScreen(
+      session: _session('STUDENT'),
+      masterDataRepository: _FakeMasterDataRepository(),
+      attendanceRepository: _StubAttendanceRepository(),
+    ),
+  );
+}
+
+class _StubAttendanceRepository extends AttendanceRepository {
+  @override
+  Future<List<AttendanceRecord>> getMyAttendance() async => [
+        const AttendanceRecord(
+            id: 1,
+            subjectId: 5,
+            status: 'PRESENT',
+            isPresent: true,
+            date: '2026-09-21',
+            lecturePeriod: '1st'),
+        const AttendanceRecord(
+            id: 2,
+            subjectId: 6,
+            status: 'ABSENT',
+            isPresent: false,
+            date: '2026-09-22',
+            lecturePeriod: '2nd'),
+      ];
+
+  @override
+  Future<AttendancePercentage> getOverallAttendanceCalculation(
+          {DateTime? startDate, DateTime? endDate}) async =>
+      const AttendancePercentage(
+          presentCount: 46, totalRecordedCount: 50, percentage: 92);
+
+  @override
+  Future<List<SubjectAttendance>> getSubjectAttendanceSummaries(
+          {DateTime? startDate, DateTime? endDate}) async =>
+      [
+        SubjectAttendance(
+            subjectId: 5,
+            subjectName: 'Data Structures And Algorithms',
+            presentCount: 42,
+            totalRecordedCount: 45,
+            percentage: 93),
+        SubjectAttendance(
+            subjectId: 6,
+            subjectName: 'Database Management Systems',
+            presentCount: 38,
+            totalRecordedCount: 42,
+            percentage: 90),
+      ];
+}
+
 Widget _masterHub() {
   return MaterialApp(
     home: MasterDataScreen(
@@ -227,6 +290,20 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.text('Attendance'), findsOneWidget);
         expect(find.byKey(const Key('teacher-reports-tile')), findsOneWidget);
+      });
+
+      testWidgets('STUDENT home renders the attendance dashboard without '
+          'overflow at ${size.width.toInt()}px', (tester) async {
+        await _atSize(tester, size);
+        await tester.pumpWidget(_studentHome());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(find.byType(StudentDashboard), findsOneWidget);
+        // The hero percentage stays the dominant, unclipped element.
+        expect(find.text('92%'), findsOneWidget);
+        expect(find.text('46 / 50 classes attended'), findsOneWidget);
+        expect(find.byType(SubjectAttendanceBars), findsOneWidget);
+        expect(find.byType(RecentAttendanceList), findsOneWidget);
       });
 
       testWidgets('master data hub renders without overflow at ${size.width.toInt()}px',

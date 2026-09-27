@@ -12,7 +12,7 @@ import '../widgets/student_dashboard.dart';
 /// Authenticated home. Role-aware welcome plus navigation into each role's
 /// modules (unchanged routes, tiles and role gating).
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({
+  HomeScreen({
     super.key,
     required this.session,
     required this.masterDataRepository,
@@ -22,6 +22,14 @@ class HomeScreen extends StatelessWidget {
   final SessionController session;
   final MasterDataRepository masterDataRepository;
   final AttendanceRepository? attendanceRepository;
+
+  /// Lets the host scroll view drive the embedded student dashboard's reload
+  /// (pull-to-refresh) without making this widget stateful.
+  final GlobalKey<StudentDashboardState> _dashboardKey =
+      GlobalKey<StudentDashboardState>();
+
+  bool get _showsDashboard =>
+      session.role == 'STUDENT' && attendanceRepository != null;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +48,7 @@ class HomeScreen extends StatelessWidget {
       body: Builder(
         builder: (context) {
           final sideNavVisible = AppShellScope.sideNavVisibleOf(context);
-          return ListView(
+          final content = ListView(
             padding: const EdgeInsets.symmetric(vertical: DagacsSpace.lg),
             children: [
               AppConstrainedMax(
@@ -53,9 +61,13 @@ class HomeScreen extends StatelessWidget {
                           horizontal: DagacsSpace.lg),
                       child: _buildWelcome(context),
                     ),
-                    if (session.role == 'STUDENT' && attendanceRepository != null) ...[
+                    if (_showsDashboard) ...[
                       const SizedBox(height: DagacsSpace.lg),
-                      _buildAttendanceSummary(context),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: DagacsSpace.lg),
+                        child: _buildAttendanceSummary(context),
+                      ),
                     ],
                     const SizedBox(height: DagacsSpace.xl),
                     Padding(
@@ -76,16 +88,26 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           );
+          // The dashboard is a non-scrolling section, so pull-to-refresh is
+          // owned by this host view and forwarded to it.
+          return _showsDashboard
+              ? RefreshIndicator(
+                  onRefresh: () async =>
+                      _dashboardKey.currentState?.reload(),
+                  child: content,
+                )
+              : content;
         },
       ),
     );
   }
 
-Widget _buildAttendanceSummary(BuildContext context) {
-  return StudentDashboard(
-    attendanceRepository: attendanceRepository!,
-  );
-}
+  Widget _buildAttendanceSummary(BuildContext context) {
+    return StudentDashboard(
+      key: _dashboardKey,
+      attendanceRepository: attendanceRepository!,
+    );
+  }
 
   /// Short role-specific sentence that introduces the user's module set.
   String _roleSubtitle(String role) {
