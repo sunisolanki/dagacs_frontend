@@ -221,7 +221,10 @@ void main() {
       await tester.tap(find.byKey(const Key('register-generate')));
       await tester.pumpAndSettle();
 
-      expect(find.text('66.67%'), findsOneWidget);
+      expect(
+          find.descendant(
+              of: find.byType(DataTable), matching: find.text('66.67%')),
+          findsOneWidget);
       // Raw float precision must never reach the UI.
       expect(find.textContaining('66.6666666'), findsNothing);
     });

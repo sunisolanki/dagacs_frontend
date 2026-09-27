@@ -135,7 +135,10 @@ void main() {
     expect(find.text('ENG-0001'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
     // Register percentages render to two decimals.
-    expect(find.text('50.00%'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byType(DataTable), matching: find.text('50.00%')),
+        findsOneWidget);
     expect(find.textContaining('LP1'), findsOneWidget);
     expect(find.textContaining('LP2'), findsOneWidget);
   });

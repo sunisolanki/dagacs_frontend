@@ -30,6 +30,8 @@ import 'package:dagacs_frontend/repositories/report_repository.dart';
 import 'package:dagacs_frontend/repositories/student_management_repository.dart';
 import 'package:dagacs_frontend/repositories/student_profile_repository.dart';
 import 'package:dagacs_frontend/repositories/teacher_management_repository.dart';
+import 'package:dagacs_frontend/repositories/teacher_repository.dart';
+import 'package:dagacs_frontend/models/teacher_assignment.dart';
 import 'package:dagacs_frontend/screens/attendance_session_list_screen.dart';
 import 'package:dagacs_frontend/screens/hod_dashboard_screen.dart';
 import 'package:dagacs_frontend/screens/hod_reports_screen.dart';
@@ -76,6 +78,11 @@ class _FakeMasterDataRepository extends MasterDataRepository {
   @override
   Future<List<Section>> getSections() async =>
       const [Section(id: 1, name: 'A', sectionCode: 'A')];
+}
+
+class _FakeTeacherRepo extends TeacherRepository {
+  @override
+  Future<List<TeacherAssignment>> getMyAssignments() async => const [];
 }
 
 class _FakeTeacherManagementRepository extends TeacherManagementRepository {
@@ -250,7 +257,8 @@ MaterialApp _buildApp(String role, _RouteObserver observer) {
         case '/teacher/reports':
           return MaterialPageRoute(
               settings: settings,
-              builder: (_) => TeacherReportsScreen(reportRepository: reports));
+              builder: (_) => TeacherReportsScreen(
+                  reportRepository: reports, teacherRepository: _FakeTeacherRepo()));
         case '/student/attendance':
           return MaterialPageRoute(
               settings: settings,
@@ -386,7 +394,7 @@ void main() {
     expect(observer.pushed.last, '/teacher/reports');
     expect(find.text('My Reports'), findsOneWidget);
     expect(
-        find.text('No attendance report data for the current filter.'),
+        find.textContaining('Select a subject and section'),
         findsOneWidget);
   });
 
