@@ -65,11 +65,23 @@ class AppShell extends StatelessWidget {
       case 'HOD':
         return const [
           _AppDestination(
-              Icons.dashboard_outlined, 'Overview', AppRoutes.home),
+              Icons.dashboard_outlined, 'Overview', AppRoutes.hodDashboard),
           _AppDestination(
-              Icons.insights_outlined, 'Analytics', AppRoutes.hodDashboard),
+              Icons.account_tree_outlined, 'Structure', AppRoutes.hodStructure),
+          _AppDestination(
+              Icons.meeting_room_outlined, 'Sections', AppRoutes.hodSections),
+          _AppDestination(Icons.book_outlined, 'Subjects', AppRoutes.hodSubjects),
+          _AppDestination(Icons.people_outline, 'Students', AppRoutes.hodStudents),
+          _AppDestination(
+              Icons.warning_amber_outlined, 'Low Attendance',
+              AppRoutes.hodLowAttendance),
+          _AppDestination(
+              Icons.timeline_outlined, 'Rollups', AppRoutes.hodRollups),
+          _AppDestination(Icons.table_chart_outlined, 'Attendance Matrix',
+              AppRoutes.hodAttendanceMatrix),
           _AppDestination(
               Icons.assessment_outlined, 'Reports', AppRoutes.hodReports),
+          _AppDestination(Icons.history, 'Audit Logs', AppRoutes.hodAuditLogs),
           _AppDestination(
               Icons.fact_check_outlined, 'My Classes',
               AppRoutes.teacherClasses),
@@ -224,6 +236,9 @@ class _NavContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentRoute = ModalRoute.of(context)?.settings.name;
+    // The destination list is scrollable so a role with many destinations
+    // (e.g. HOD) never overflows a short desktop viewport. The user header
+    // stays pinned above it and the sign-out action stays pinned below.
     return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -250,22 +265,28 @@ class _NavContent extends StatelessWidget {
             ),
           ),
           const Divider(),
-          for (final destination in destinations)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: DagacsSpace.sm, vertical: 2),
-              child: ListTile(
-                selected: currentRoute != null &&
-                    _isSameOrChildRoute(currentRoute, destination.route),
-                selectedTileColor: DagacsColors.brandSoft,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(DagacsRadius.md)),
-                leading: Icon(destination.icon),
-                title: Text(destination.label),
-                onTap: () => onNavigate(destination.route),
-              ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                for (final destination in destinations)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: DagacsSpace.sm, vertical: 2),
+                    child: ListTile(
+                      selected: currentRoute != null &&
+                          _isSameOrChildRoute(currentRoute, destination.route),
+                      selectedTileColor: DagacsColors.brandSoft,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(DagacsRadius.md)),
+                      leading: Icon(destination.icon),
+                      title: Text(destination.label),
+                      onTap: () => onNavigate(destination.route),
+                    ),
+                  ),
+              ],
             ),
-          const Spacer(),
+          ),
           const Divider(),
           Padding(
             padding: const EdgeInsets.all(DagacsSpace.sm),

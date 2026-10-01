@@ -361,7 +361,7 @@ class HomeScreen extends StatelessWidget {
       tiles.add(
         AppFeatureTile(
           icon: Icons.dashboard_customize,
-          title: 'HOD Dashboard',
+          title: 'HOD Overview',
           subtitle:
               'Department analytics: attendance, low attendance, rollups',
           onTap: () => Navigator.pushNamed(context, AppRoutes.hodDashboard),

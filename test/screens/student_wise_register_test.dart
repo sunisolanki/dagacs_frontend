@@ -124,6 +124,26 @@ Future<void> _choose(String subjectLabel, String sectionLabel) async {
   await tester.pumpAndSettle();
 }
 
+/// Chooses the class, picks both required dates, then presses Generate.
+Future<void> _chooseAndGenerate(String subjectLabel, String sectionLabel) async {
+  final tester = _currentTester!;
+  await _choose(subjectLabel, sectionLabel);
+  await _pickDate(tester, 'Start date', 1);
+  await _pickDate(tester, 'End date', 28);
+  await tester.tap(find.byKey(const Key('register-generate')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pickDate(WidgetTester tester, String label, int day) async {
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+  await tester.tap(find.descendant(
+      of: find.byType(CalendarDatePicker), matching: find.text('$day')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('OK'));
+  await tester.pumpAndSettle();
+}
+
 late WidgetTester? _currentTester;
 
 void main() {
@@ -146,22 +166,40 @@ void main() {
       expect(find.text('Database Systems (DBMS)'), findsWidgets);
     });
 
-    testWidgets('Generate is disabled until both are chosen', (tester) async {
+    testWidgets('Generate stays disabled until class and both dates are chosen',
+        (tester) async {
       _currentTester = tester;
       final reports = _FakeReportRepository()..report = _report;
       final teachers = _FakeTeacherRepository()
         ..assignments = const [_dsAssignment, _dbmsAssignment];
       await _pump(tester, reports, teachers);
 
+      bool enabled() => tester
+          .widget<ElevatedButton>(find.descendant(
+              of: find.byKey(const Key('register-generate')),
+              matching: find.byType(ElevatedButton)))
+          .onPressed !=
+          null;
+
       // Nothing fetched just by having assignments.
       expect(reports.matrixCalls, isEmpty);
       expect(find.textContaining('Select a subject and section'),
           findsOneWidget);
+      expect(enabled(), isFalse, reason: 'no subject or section yet');
 
       await _choose('Data Structures (DS)', 'CSE-A (A)');
-      // Still not fetched until Generate is pressed.
+      // Class chosen, but the dates are still missing.
       expect(reports.matrixCalls, isEmpty);
-      expect(find.textContaining('Tap Generate Report'), findsOneWidget);
+      expect(find.textContaining('Select a start and end date'),
+          findsOneWidget);
+      expect(enabled(), isFalse, reason: 'both dates are required');
+
+      await _pickDate(tester, 'Start date', 1);
+      expect(enabled(), isFalse, reason: 'only a start date');
+      expect(reports.matrixCalls, isEmpty);
+
+      await _pickDate(tester, 'End date', 28);
+      expect(enabled(), isTrue);
 
       await tester.tap(find.byKey(const Key('register-generate')));
       await tester.pumpAndSettle();
@@ -176,9 +214,7 @@ void main() {
         ..assignments = const [_dsAssignment, _dbmsAssignment];
       await _pump(tester, reports, teachers);
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
       expect(find.text('ENG-0001'), findsOneWidget);
 
       // Switching subject must invalidate the class selection.
@@ -200,9 +236,7 @@ void main() {
         ..assignments = const [_dsAssignment, _dbmsAssignment];
       await _pump(tester, reports, teachers);
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
 
       expect(reports.matrixCalls.single.subjectId, 100);
       expect(reports.matrixCalls.single.sectionId, 200);
@@ -217,9 +251,7 @@ void main() {
         ..assignments = const [_dsAssignment];
       await _pump(tester, reports, teachers);
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
 
       expect(
           find.descendant(
@@ -237,17 +269,18 @@ void main() {
         ..assignments = const [_dsAssignment];
       await _pump(tester, reports, teachers);
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
 
-      expect(find.textContaining('2026-01-10'), findsWidgets);
-      expect(find.textContaining('2026-01-12'), findsWidgets);
-      expect(find.textContaining('2026-01-14'), findsWidgets);
-      // Identity + totals columns.
-      expect(find.text('Enrollment'), findsOneWidget);
-      expect(find.text('Student'), findsOneWidget);
+      // One clearly labelled column per CONDUCTED session date.
+      expect(find.text('10-Jan-2026 (LP1)'), findsOneWidget);
+      expect(find.text('12-Jan-2026 (LP1)'), findsOneWidget);
+      expect(find.text('14-Jan-2026 (LP1)'), findsOneWidget);
+      // Identity + totals columns, and never a roll number.
+      expect(find.text('Enrollment No.'), findsOneWidget);
+      expect(find.text('Student Name'), findsOneWidget);
+      expect(find.text('Present'), findsOneWidget);
       expect(find.text('Total Classes'), findsOneWidget);
+      expect(find.text('Percentage'), findsOneWidget);
     });
 
     testWidgets('exports use the selected class', (tester) async {
@@ -266,9 +299,7 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
 
       await tester.tap(find.byKey(const Key('export-excel')));
       await tester.pumpAndSettle();
@@ -291,20 +322,26 @@ void main() {
         ..assignments = const [_dsAssignment];
       await _pump(tester, reports, teachers);
 
-      await _choose('Data Structures (DS)', 'CSE-A (A)');
-      await tester.tap(find.byKey(const Key('register-generate')));
-      await tester.pumpAndSettle();
+      await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
 
-      expect(find.textContaining('No attendance data'), findsOneWidget);
+      expect(find.textContaining('No conducted attendance sessions'),
+          findsOneWidget);
       expect(find.byKey(const Key('report-retry')), findsNothing);
     });
 
     testWidgets('no overflow at 320 / 800 / 1280 px', (tester) async {
+      // Height is kept generous so the Material date picker (used to set the
+      // required start/end dates) is operable at every width; the widths are
+      // what this test is about.
       for (final size in [
-        const Size(320, 640),
-        const Size(800, 600),
+        const Size(320, 900),
+        const Size(800, 800),
         const Size(1280, 800),
       ]) {
+        // Dispose the previous tree so the view's State (dates, selections) is
+        // recreated; otherwise the next iteration inherits the chosen dates and
+        // the "Start date" affordance is no longer rendered.
+        await tester.pumpWidget(const SizedBox.shrink());
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.reset);
@@ -315,9 +352,11 @@ void main() {
           ..assignments = const [_dsAssignment];
         await _pump(tester, reports, teachers);
 
-        await _choose('Data Structures (DS)', 'CSE-A (A)');
-        await tester.tap(find.byKey(const Key('register-generate')));
-        await tester.pumpAndSettle();
+        await _chooseAndGenerate('Data Structures (DS)', 'CSE-A (A)');
+
+        // The register actually rendered.
+        expect(find.byType(DataTable), findsOneWidget,
+            reason: 'no matrix at ${size.width}px');
 
         expect(tester.takeException(), isNull,
             reason: 'overflow at ${size.width}px');

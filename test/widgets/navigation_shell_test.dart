@@ -112,7 +112,7 @@ void main() {
       expect(find.text('My Profile'), findsOneWidget);
       expect(find.text('Master Data'), findsNothing);
       expect(find.text('Students'), findsNothing);
-      expect(find.text('Analytics'), findsNothing);
+      expect(find.text('Structure'), findsNothing);
     });
 
     testWidgets('HOD sees only HOD destinations', (tester) async {
@@ -120,10 +120,19 @@ void main() {
       await tester.pumpWidget(_shellApp('HOD'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Analytics'), findsOneWidget);
+      expect(find.text('Overview'), findsOneWidget);
+      expect(find.text('Structure'), findsOneWidget);
+      expect(find.text('Sections'), findsOneWidget);
+      expect(find.text('Subjects'), findsOneWidget);
+      expect(find.text('Students'), findsOneWidget);
+      expect(find.text('Low Attendance'), findsOneWidget);
+      expect(find.text('Rollups'), findsOneWidget);
       expect(find.text('Reports'), findsOneWidget);
+      expect(find.text('Audit Logs'), findsOneWidget);
+      expect(find.text('My Classes'), findsOneWidget);
       expect(find.text('Master Data'), findsNothing);
       expect(find.text('My Profile'), findsNothing);
+      expect(find.text('Attendance'), findsNothing);
     });
   });
 

@@ -4,6 +4,7 @@ import 'package:dagacs_frontend/models/attendance_record.dart';
 import 'package:dagacs_frontend/models/attendance_session.dart';
 import 'package:dagacs_frontend/models/auth_response.dart';
 import 'package:dagacs_frontend/models/batch.dart';
+import 'package:dagacs_frontend/core/context/hod_academic_context.dart';
 import 'package:dagacs_frontend/models/hod_audit_log_entry.dart';
 import 'package:dagacs_frontend/models/hod_coverage_row.dart';
 import 'package:dagacs_frontend/models/hod_daily_lecture_row.dart';
@@ -33,7 +34,7 @@ import 'package:dagacs_frontend/repositories/teacher_management_repository.dart'
 import 'package:dagacs_frontend/repositories/teacher_repository.dart';
 import 'package:dagacs_frontend/models/teacher_assignment.dart';
 import 'package:dagacs_frontend/screens/attendance_session_list_screen.dart';
-import 'package:dagacs_frontend/screens/hod_dashboard_screen.dart';
+import 'package:dagacs_frontend/screens/hod/hod_overview_screen.dart';
 import 'package:dagacs_frontend/screens/hod_reports_screen.dart';
 import 'package:dagacs_frontend/screens/home_screen.dart';
 import 'package:dagacs_frontend/screens/master_data_screen.dart';
@@ -121,7 +122,7 @@ class _FakeAttendanceRepository extends AttendanceRepository {
 
   @override
   Future<AttendancePercentage> getOverallAttendanceCalculation(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       throw const ApiException.network();
 
   @override
@@ -137,7 +138,7 @@ class _FakeHodRepository extends HodRepository {
 
   @override
   Future<HodDashboard> getDashboard(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const HodDashboard(
         departmentName: 'Computer Engineering',
         departmentCode: 'CE',
@@ -152,22 +153,22 @@ class _FakeHodRepository extends HodRepository {
 
   @override
   Future<List<HodSectionAttendance>> getSections(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 
   @override
   Future<List<HodSubjectAttendance>> getSubjects(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 
   @override
   Future<List<HodStudentAttendance>> getStudents(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 
   @override
   Future<List<HodLowAttendance>> getLowAttendance(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 
   @override
@@ -179,7 +180,7 @@ class _FakeHodRepository extends HodRepository {
 
   @override
   Future<List<HodAuditLogEntry>> getAuditLogs(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 }
 
@@ -204,7 +205,7 @@ class _FakeReportRepository extends ReportRepository {
 
   @override
   Future<List<TeacherReportRow>> getTeacherReport(
-      {DateTime? startDate, DateTime? endDate}) async =>
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async =>
       const [];
 }
 
@@ -243,7 +244,10 @@ MaterialApp _buildApp(String role, _RouteObserver observer) {
         case '/hod/dashboard':
           return MaterialPageRoute(
               settings: settings,
-              builder: (_) => HodDashboardScreen(hodRepository: hod));
+              builder: (_) => HodOverviewScreen(
+                    hodRepository: hod,
+                    session: session,
+                    academicContext: HodAcademicContext()));
         case '/hod/reports':
           return MaterialPageRoute(
               settings: settings,
@@ -307,7 +311,7 @@ void main() {
     expect(find.text('Master Data'), findsOneWidget);
 
     // Unauthorized HOD / Teacher / Student module controls are not exposed.
-    expect(find.text('HOD Dashboard'), findsNothing);
+    expect(find.text('HOD Overview'), findsNothing);
     expect(find.byKey(const Key('hod-reports-tile')), findsNothing);
     expect(find.text('Attendance'), findsNothing);
     expect(find.byKey(const Key('teacher-reports-tile')), findsNothing);
@@ -330,7 +334,7 @@ void main() {
     final observer = _RouteObserver();
     await _pumpRole(tester, observer, 'HOD');
 
-    expect(find.text('HOD Dashboard'), findsOneWidget);
+    expect(find.text('HOD Overview'), findsOneWidget);
     expect(find.byKey(const Key('hod-reports-tile')), findsOneWidget);
 
     // Unauthorized Teacher / Student / Admin controls are not exposed.
@@ -343,7 +347,7 @@ void main() {
     expect(find.byKey(const Key('admin-master-data-tile')), findsNothing);
     expect(find.text('Master Data'), findsNothing);
 
-    await tester.tap(find.text('HOD Dashboard'));
+    await tester.tap(find.text('HOD Overview'));
     await tester.pumpAndSettle();
 
     expect(observer.pushed.last, '/hod/dashboard');
@@ -369,7 +373,7 @@ void main() {
     expect(find.byKey(const Key('teacher-reports-tile')), findsOneWidget);
 
     // Unauthorized HOD / Admin / Student controls are not exposed.
-    expect(find.text('HOD Dashboard'), findsNothing);
+    expect(find.text('HOD Overview'), findsNothing);
     expect(find.byKey(const Key('hod-reports-tile')), findsNothing);
     expect(find.byKey(const Key('admin-students-tile')), findsNothing);
     expect(find.text('Manage Students'), findsNothing);
@@ -392,7 +396,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(observer.pushed.last, '/teacher/reports');
-    expect(find.text('My Reports'), findsOneWidget);
+    expect(find.text('Teacher Attendance Report'), findsOneWidget);
     expect(
         find.textContaining('Select a subject and section'),
         findsOneWidget);
@@ -412,7 +416,7 @@ void main() {
     expect(find.text('Manage Students'), findsNothing);
     expect(find.byKey(const Key('admin-master-data-tile')), findsNothing);
     expect(find.text('Master Data'), findsNothing);
-    expect(find.text('HOD Dashboard'), findsNothing);
+    expect(find.text('HOD Overview'), findsNothing);
     expect(find.byKey(const Key('hod-reports-tile')), findsNothing);
     expect(find.text('Attendance'), findsNothing);
     expect(find.byKey(const Key('teacher-reports-tile')), findsNothing);

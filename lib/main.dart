@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/context/hod_academic_context.dart';
 import 'core/navigation/navigator.dart';
 import 'core/theme/dagacs_theme.dart';
 import 'core/session/session_controller.dart';
@@ -7,6 +8,8 @@ import 'models/teacher_assignment.dart';
 import 'network/api_client.dart';
 import 'repositories/attendance_repository.dart';
 import 'repositories/auth_repository.dart';
+import 'repositories/hod_attendance_repository.dart';
+import 'repositories/hod_hierarchy_repository.dart';
 import 'repositories/hod_repository.dart';
 import 'repositories/master_data_repository.dart';
 import 'repositories/report_repository.dart';
@@ -14,9 +17,20 @@ import 'repositories/student_profile_repository.dart';
 import 'repositories/student_management_repository.dart';
 import 'repositories/teacher_management_repository.dart';
 import 'repositories/teacher_repository.dart';
+import 'services/hod_hierarchy_loader.dart';
 import 'screens/attendance_session_list_screen.dart';
 import 'screens/create_session_screen.dart';
-import 'screens/hod_dashboard_screen.dart';
+import 'screens/hod/hod_attendance_matrix_screen.dart';
+import 'screens/hod/hod_audit_logs_screen.dart';
+import 'screens/hod/hod_low_attendance_screen.dart';
+import 'screens/hod/hod_overview_screen.dart';
+import 'screens/hod/hod_rollups_screen.dart';
+import 'screens/hod/hod_sections_screen.dart';
+import 'screens/hod/hod_student_detail_screen.dart';
+import 'screens/hod/hod_students_screen.dart';
+import 'screens/hod/hod_structure_screen.dart';
+import 'screens/hod/hod_subject_detail_screen.dart';
+import 'screens/hod/hod_subjects_screen.dart';
 import 'screens/hod_reports_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
@@ -63,6 +77,10 @@ class AppDependencies {
   static final AttendanceRepository attendanceRepository =
       AttendanceRepository(apiClient);
   static final HodRepository hodRepository = HodRepository(apiClient);
+  /// Phase 3 HOD attendance intelligence (overview, matrix, detail, low
+  /// attendance) and the matrix Excel/PDF export.
+  static final HodAttendanceRepository hodAttendanceRepository =
+      HodAttendanceRepository(apiClient);
   static final ReportRepository reportRepository =
       ReportRepository(apiClient);
   static final StudentProfileRepository studentProfileRepository =
@@ -75,11 +93,37 @@ class AppDependencies {
       TeacherManagementRepository(apiClient);
   static final SessionController session =
       SessionController(authRepository);
+
+  /// Shared HOD academic context. A single instance keeps the Academic Session
+  /// -> Program -> Semester -> Section -> Subject selection (and the date
+  /// range) alive across HOD route navigation.
+  static final HodAcademicContext hodContext = HodAcademicContext();
+
+  /// Loads the department-scoped academic hierarchy once and caches it. Shared
+  /// by every HOD route so re-entering a screen never refetches the root.
+  static final HodHierarchyLoader hodHierarchyLoader = HodHierarchyLoader(
+    repository: HodHierarchyRepository(apiClient),
+    context: hodContext,
+  );
 }
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const DAGACSApp());
+}
+
+/// Opens one student's attendance detail in the current academic context.
+///
+/// The id always originates from a tapped row, and the selected academic context
+/// travels with the screen, so the detail can never describe a different
+/// semester or section than the one the HOD is reviewing.
+void _openStudentDetail(int studentId) {
+  navigatorKey.currentState?.pushNamed(AppRoutes.hodStudentDetail, arguments: studentId);
+}
+
+/// Opens one subject's attendance detail in the current academic context.
+void _openSubjectDetail(int subjectId) {
+  navigatorKey.currentState?.pushNamed(AppRoutes.hodSubjectDetail, arguments: subjectId);
 }
 
 class DAGACSApp extends StatelessWidget {
@@ -215,13 +259,118 @@ class DAGACSApp extends StatelessWidget {
                          AppDependencies.studentManagementRepository));
            case AppRoutes.hodDashboard:
             return MaterialPageRoute(
-                builder: (_) => HodDashboardScreen(
-                    hodRepository: AppDependencies.hodRepository));
-          case AppRoutes.hodReports:
+                builder: (_) => HodOverviewScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    attendanceRepository:
+                        AppDependencies.hodAttendanceRepository,
+                    onOpenStudent: _openStudentDetail,
+                    onOpenSubject: _openSubjectDetail));
+           case AppRoutes.hodStructure:
+            return MaterialPageRoute(
+                builder: (_) => HodStructureScreen(
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext));
+           case AppRoutes.hodSections:
+            return MaterialPageRoute(
+                builder: (_) => HodSectionsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader));
+           case AppRoutes.hodSubjects:
+            return MaterialPageRoute(
+                builder: (_) => HodSubjectsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    attendanceRepository:
+                        AppDependencies.hodAttendanceRepository,
+                    onOpenSubject: _openSubjectDetail));
+           case AppRoutes.hodStudents:
+            return MaterialPageRoute(
+                builder: (_) => HodStudentsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    attendanceRepository:
+                        AppDependencies.hodAttendanceRepository,
+                    onOpenStudent: _openStudentDetail));
+           case AppRoutes.hodLowAttendance:
+            return MaterialPageRoute(
+                builder: (_) => HodLowAttendanceScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    attendanceRepository:
+                        AppDependencies.hodAttendanceRepository,
+                    onOpenStudent: _openStudentDetail));
+           case AppRoutes.hodRollups:
+            return MaterialPageRoute(
+                builder: (_) => HodRollupsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext));
+           case AppRoutes.hodAuditLogs:
+            return MaterialPageRoute(
+                builder: (_) => HodAuditLogsScreen(
+                    hodRepository: AppDependencies.hodRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext));
+           case AppRoutes.hodAttendanceMatrix:
+            return MaterialPageRoute(
+                builder: (_) => HodAttendanceMatrixScreen(
+                    repository: AppDependencies.hodAttendanceRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader));
+           case AppRoutes.hodStudentDetail:
+            // The id always originates from a tapped row; the server still
+            // proves it belongs to the selected context before any query.
+            final studentId = settings.arguments is int
+                ? settings.arguments as int
+                : null;
+            if (studentId == null) {
+              return MaterialPageRoute(builder: (_) => const NotFoundScreen());
+            }
+            return MaterialPageRoute(
+                builder: (_) => HodStudentDetailScreen(
+                    repository: AppDependencies.hodAttendanceRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    studentId: studentId));
+           case AppRoutes.hodSubjectDetail:
+            final subjectId = settings.arguments is int
+                ? settings.arguments as int
+                : null;
+            if (subjectId == null) {
+              return MaterialPageRoute(builder: (_) => const NotFoundScreen());
+            }
+            return MaterialPageRoute(
+                builder: (_) => HodSubjectDetailScreen(
+                    repository: AppDependencies.hodAttendanceRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    subjectId: subjectId));
+           case AppRoutes.hodReports:
             return MaterialPageRoute(
                 builder: (_) => HodReportsScreen(
                     hodRepository: AppDependencies.hodRepository,
-                    reportRepository: AppDependencies.reportRepository));
+                    reportRepository: AppDependencies.reportRepository,
+                    attendanceRepository:
+                        AppDependencies.hodAttendanceRepository,
+                    session: AppDependencies.session,
+                    academicContext: AppDependencies.hodContext,
+                    hierarchyLoader: AppDependencies.hodHierarchyLoader,
+                    onOpenStudent: _openStudentDetail,
+                    onOpenSubject: _openSubjectDetail));
           case AppRoutes.teacherReports:
             return MaterialPageRoute(
                 builder: (_) => TeacherReportsScreen(

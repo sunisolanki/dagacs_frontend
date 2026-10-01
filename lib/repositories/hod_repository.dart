@@ -26,28 +26,76 @@ class HodRepository {
           startDate: startDate, endDate: endDate);
 
   /// Section-wise attendance summary (latest attendance date semantics).
-  Future<List<HodSectionAttendance>> getSections(
-          {DateTime? startDate, DateTime? endDate}) =>
+  ///
+  /// [academicSessionId]/[programId]/[semesterId]/[sectionId] are optional. When
+  /// none is supplied the backend runs the original department-wide query, so
+  /// the pre-existing behaviour is preserved exactly.
+  Future<List<HodSectionAttendance>> getSections({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) =>
       _list('/hod/sections', HodSectionAttendance.fromJson,
-          startDate: startDate, endDate: endDate);
+          startDate: startDate,
+          endDate: endDate,
+          academicSessionId: academicSessionId,
+          programId: programId,
+          semesterId: semesterId,
+          sectionId: sectionId);
 
   /// Subject-wise attendance summary with enrolled student counts.
-  Future<List<HodSubjectAttendance>> getSubjects(
-          {DateTime? startDate, DateTime? endDate}) =>
+  Future<List<HodSubjectAttendance>> getSubjects({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) =>
       _list('/hod/subjects', HodSubjectAttendance.fromJson,
-          startDate: startDate, endDate: endDate);
+          startDate: startDate,
+          endDate: endDate,
+          academicSessionId: academicSessionId,
+          programId: programId,
+          semesterId: semesterId,
+          sectionId: sectionId);
 
   /// Full per-student attendance summary.
-  Future<List<HodStudentAttendance>> getStudents(
-          {DateTime? startDate, DateTime? endDate}) =>
+  Future<List<HodStudentAttendance>> getStudents({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) =>
       _list('/hod/students', HodStudentAttendance.fromJson,
-          startDate: startDate, endDate: endDate);
+          startDate: startDate,
+          endDate: endDate,
+          academicSessionId: academicSessionId,
+          programId: programId,
+          semesterId: semesterId,
+          sectionId: sectionId);
 
   /// Students below the FIXED 75.0% threshold.
-  Future<List<HodLowAttendance>> getLowAttendance(
-          {DateTime? startDate, DateTime? endDate}) =>
+  Future<List<HodLowAttendance>> getLowAttendance({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) =>
       _list('/hod/low-attendance', HodLowAttendance.fromJson,
-          startDate: startDate, endDate: endDate);
+          startDate: startDate,
+          endDate: endDate,
+          academicSessionId: academicSessionId,
+          programId: programId,
+          semesterId: semesterId,
+          sectionId: sectionId);
 
   /// Monthly or quarterly attendance rollup for the department.
   Future<List<HodRollup>> getRollups(
@@ -70,13 +118,35 @@ class HodRepository {
 
   // ── Internal helpers ───────────────────────────────────────────
 
-  String _query(base, {DateTime? startDate, DateTime? endDate}) {
+  String _query(
+    base, {
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) {
     final params = <String>[];
     if (startDate != null) {
       params.add('startDate=${_formatDate(startDate)}');
     }
     if (endDate != null) {
       params.add('endDate=${_formatDate(endDate)}');
+    }
+    // Optional academic context. Omitted entirely when the HOD has not chosen
+    // one, which keeps the backend on its department-wide query.
+    if (academicSessionId != null) {
+      params.add('academicSessionId=$academicSessionId');
+    }
+    if (programId != null) {
+      params.add('programId=$programId');
+    }
+    if (semesterId != null) {
+      params.add('semesterId=$semesterId');
+    }
+    if (sectionId != null) {
+      params.add('sectionId=$sectionId');
     }
     return params.isEmpty ? base : '$base?${params.join('&')}';
   }
@@ -114,13 +184,23 @@ class HodRepository {
   }
 
   Future<List<T>> _list<T>(
-      String path,
-      T Function(Map<String, dynamic>) fromJson,
-      {DateTime? startDate,
-      DateTime? endDate}) async {
+    String path,
+    T Function(Map<String, dynamic>) fromJson, {
+    DateTime? startDate,
+    DateTime? endDate,
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+  }) async {
     try {
       final data = await _client.get(_query(path,
-          startDate: startDate, endDate: endDate));
+          startDate: startDate,
+          endDate: endDate,
+          academicSessionId: academicSessionId,
+          programId: programId,
+          semesterId: semesterId,
+          sectionId: sectionId));
       if (data is! List) {
         throw const ApiException.serverError();
       }

@@ -29,7 +29,7 @@ class _FakeHodRepository extends HodRepository {
 
   @override
   Future<List<HodLowAttendance>> getLowAttendance(
-          {DateTime? startDate, DateTime? endDate}) async {
+          {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) async {
     lastLowStart = startDate;
     lastLowEnd = endDate;
     return low;
@@ -85,7 +85,7 @@ class _FakeReportRepository extends ReportRepository {
 
   @override
   Future<DownloadPayload> exportHodReport(String reportType, String format,
-      {DateTime? startDate, DateTime? endDate}) {
+      {DateTime? startDate, DateTime? endDate, int? academicSessionId, int? programId, int? semesterId, int? sectionId}) {
     exportCalls.add(
         (type: reportType, format: format, start: startDate, end: endDate));
     if (exportError != null) {

@@ -32,7 +32,7 @@ class TeacherReportsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Reports')),
+      appBar: AppBar(title: const Text('Teacher Attendance Report')),
       body: StudentAttendanceReportView(
         reportRepository: reportRepository,
         teacherRepository: teacherRepository,

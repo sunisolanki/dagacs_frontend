@@ -95,8 +95,9 @@ Widget _wrap(_FakeReportRepository reports, _FakeTeacherRepository teachers,
   );
 }
 
-/// Drives the separate Subject -> Section selectors and the explicit Generate
-/// action, replacing the former combined "Class" dropdown.
+/// Drives the separate Subject -> Section selectors, the required start/end
+/// dates, and the explicit Generate action, replacing the former combined
+/// "Class" dropdown.
 Future<void> _selectAndGenerate(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('register-subject')));
   await tester.pumpAndSettle();
@@ -107,6 +108,17 @@ Future<void> _selectAndGenerate(WidgetTester tester) async {
   await tester.pumpAndSettle();
   await tester.tap(find.text('CSE-A (A)').last);
   await tester.pumpAndSettle();
+
+  // Both dates are required before Generate is enabled.
+  for (final entry in {'Start date': '1', 'End date': '28'}.entries) {
+    await tester.tap(find.text(entry.key));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+        of: find.byType(CalendarDatePicker), matching: find.text(entry.value)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+  }
 
   await tester.tap(find.byKey(const Key('register-generate')));
   await tester.pumpAndSettle();

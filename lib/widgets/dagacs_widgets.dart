@@ -304,11 +304,16 @@ class AppPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.child,
     this.loading = false,
+    this.enabled = true,
   });
 
   final VoidCallback onPressed;
   final Widget? child;
   final bool loading;
+
+  /// When false the button renders in its disabled state and ignores taps.
+  /// Defaults to true so existing callers are unaffected.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -316,7 +321,7 @@ class AppPrimaryButton extends StatelessWidget {
       width: double.infinity,
       height: 48,
       child: ElevatedButton(
-        onPressed: loading ? null : onPressed,
+        onPressed: (loading || !enabled) ? null : onPressed,
         child: loading
             ? const SizedBox(
                 width: 20,
@@ -868,6 +873,7 @@ class AppFormDropdown<T> extends StatelessWidget {
     required this.items,
     required this.onChanged,
     this.validator,
+    this.enabled = true,
   });
 
   final String label;
@@ -875,6 +881,11 @@ class AppFormDropdown<T> extends StatelessWidget {
   final List<DropdownMenuItem<T>> items;
   final ValueChanged<T?> onChanged;
   final String? Function(T?)? validator;
+
+  /// When false the control is rendered read-only. Added for filter contexts
+  /// whose options are not yet available; defaults to true so every existing
+  /// caller is unaffected.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -885,8 +896,8 @@ class AppFormDropdown<T> extends StatelessWidget {
         decoration: InputDecoration(labelText: label),
         value: value,
         items: items,
-        onChanged: onChanged,
-        validator: validator,
+        onChanged: enabled ? onChanged : null,
+        validator: enabled ? validator : null,
       ),
     );
   }

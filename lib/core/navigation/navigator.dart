@@ -13,7 +13,17 @@ class AppRoutes {
   static const String studentChangePassword = '/student/change-password';
   static const String adminStudents = '/admin/students';
   static const String hodDashboard = '/hod/dashboard';
+  static const String hodStructure = '/hod/structure';
+  static const String hodSections = '/hod/sections';
+  static const String hodSubjects = '/hod/subjects';
+  static const String hodStudents = '/hod/students';
+  static const String hodLowAttendance = '/hod/low-attendance';
+  static const String hodRollups = '/hod/rollups';
+  static const String hodAttendanceMatrix = '/hod/attendance-matrix';
+  static const String hodStudentDetail = '/hod/student-detail';
+  static const String hodSubjectDetail = '/hod/subject-detail';
   static const String hodReports = '/hod/reports';
+  static const String hodAuditLogs = '/hod/audit-logs';
   static const String teacherReports = '/teacher/reports';
   static const String teacherStudentWise = '/teacher/student-wise';
   static const String teacherClasses = '/teacher/classes';
