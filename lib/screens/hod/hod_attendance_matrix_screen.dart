@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/context/hod_academic_context.dart';
+import '../../core/hod_report_export_kind.dart';
 import '../../core/session/session_controller.dart';
 import '../../core/theme/dagacs_theme.dart';
-import '../../network/api_exception.dart';
 import '../../repositories/hod_attendance_repository.dart';
 import '../../services/hod_hierarchy_loader.dart';
 import '../../services/report_file_downloader.dart';
-import '../../widgets/report_widgets.dart';
 import '../../widgets/hod/hod_attendance_panels.dart';
 import '../../widgets/hod/hod_export_bar.dart';
 import '../../widgets/hod/hod_scaffold.dart';
@@ -47,11 +46,21 @@ class HodAttendanceMatrixScreen extends StatefulWidget {
 class _HodAttendanceMatrixScreenState extends State<HodAttendanceMatrixScreen> {
   /// Bumped on every context or date change; the panel refetches when it moves.
   int _reloadToken = 0;
-  bool _exporting = false;
 
   /// False until the matrix has loaded, so a download can never be triggered for
   /// a context the table is not yet showing.
   bool _exportReady = false;
+
+  /// True while a file is being generated; locks the academic context.
+  bool _exportBusy = false;
+
+  /// The context the table on screen was actually loaded for.
+  ///
+  /// <b>Phase 4A.</b> The export used to read the live academic context at click
+  /// time, so switching section between a load and an export produced a file for
+  /// the <i>new</i> section while the table still showed the <i>old</i> one.
+  /// Exporting the snapshot the table was rendered from makes that impossible.
+  HodExportContext? _loadedContext;
 
   bool get _hasContext =>
       widget.academicContext.academicSessionId != null &&
@@ -62,15 +71,18 @@ class _HodAttendanceMatrixScreenState extends State<HodAttendanceMatrixScreen> {
   void _reload() => setState(() {
         _reloadToken++;
         _exportReady = false;
+        _loadedContext = null;
       });
 
-  /// Downloads the cross-tab. The date range is sent so the file matches exactly
-  /// what the table is showing.
+  /// Downloads the cross-tab, for the exact context the table is showing.
   Future<String> _export(String format) async {
-    if (!_hasContext) {
-      throw StateError(HodAttendanceRepository.matrixContextRequiredMessage);
+    final ctx = _loadedContext;
+    if (!_hasContext || ctx == null) {
+      throw StateError(
+          widget.academicContext.datesInvalid
+              ? 'Start date must not be after end date.'
+              : HodAttendanceRepository.matrixContextRequiredMessage);
     }
-    final ctx = widget.academicContext;
     final payload = await widget.repository.exportMatrix(
       format,
       academicSessionId: ctx.academicSessionId,
@@ -96,6 +108,9 @@ class _HodAttendanceMatrixScreenState extends State<HodAttendanceMatrixScreen> {
       onRangeChanged: _reload,
       hierarchyLoader: widget.hierarchyLoader,
       onContextChanged: _reload,
+      // Locked for the duration of a generation so the section cannot change
+      // while a file is being produced for it.
+      controlsEnabled: !_exportBusy,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -110,6 +125,10 @@ class _HodAttendanceMatrixScreenState extends State<HodAttendanceMatrixScreen> {
               disabledReason: _hasContext
                   ? 'The matrix is still loading.'
                   : HodAttendanceRepository.matrixContextRequiredMessage,
+              reportLabel: HodReportExportKind.matrix.label,
+              onBusyChanged: (busy) {
+                if (mounted) setState(() => _exportBusy = busy);
+              },
               onExport: (format) => _export(format.name),
             ),
           ),
@@ -118,11 +137,29 @@ class _HodAttendanceMatrixScreenState extends State<HodAttendanceMatrixScreen> {
               repository: widget.repository,
               academicContext: widget.academicContext,
               reloadToken: _reloadToken,
-              onReportLoaded: () => setState(() => _exportReady = true),
+              onReportLoaded: _captureLoadedContext,
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Snapshots the context the panel has just successfully loaded.
+  void _captureLoadedContext() {
+    if (!mounted) return;
+    final ctx = widget.academicContext;
+    setState(() {
+      _exportReady = true;
+      _loadedContext = HodExportContext(
+        academicSessionId: ctx.academicSessionId,
+        programId: ctx.programId,
+        semesterId: ctx.semesterId,
+        sectionId: ctx.sectionId,
+        subjectId: ctx.subjectId,
+        startDate: ctx.startDate,
+        endDate: ctx.endDate,
+      );
+    });
   }
 }

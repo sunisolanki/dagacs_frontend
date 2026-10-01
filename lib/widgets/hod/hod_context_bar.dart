@@ -20,6 +20,7 @@ class HodContextBar extends StatelessWidget {
     required this.context,
     this.loader,
     this.onLevelChanged,
+    this.enabled = true,
   });
 
   final HodAcademicContext context;
@@ -31,6 +32,14 @@ class HodContextBar extends StatelessWidget {
   /// Invoked after a level is selected so the owning screen can refetch.
   final ValueChanged<HodContextLevel>? onLevelChanged;
 
+  /// Whether the level dropdowns accept a selection.
+  ///
+  /// <b>Phase 4A.</b> A page producing an export file sets this to false for the
+  /// duration of the generation, so the academic context provably cannot change
+  /// while a file is being produced for it. Defaults to true, so every existing
+  /// caller and every existing test keeps its exact behaviour.
+  final bool enabled;
+
   static const Map<HodContextLevel, String> _labels = {
     HodContextLevel.academicSession: 'Academic Session',
     HodContextLevel.program: 'Program',
@@ -40,6 +49,9 @@ class HodContextBar extends StatelessWidget {
   };
 
   Future<void> _handleChanged(HodContextLevel level, int? value) async {
+    // The lock is enforced here as well as in the dropdown, so a programmatic
+    // selection cannot bypass the disabled visual state either.
+    if (!enabled) return;
     final options = context.optionsFor(level);
     final match = options.where((option) => option.id == value);
     context.select(level, value, name: match.isEmpty ? null : match.first.label);
@@ -237,8 +249,10 @@ class HodContextBar extends StatelessWidget {
   Widget _buildDropdown(HodContextLevel level) {
     final options = _visibleOptions(level);
     final selectedId = context.idFor(level);
-    // A level is usable only once it genuinely holds values.
-    final enabled = context.hierarchyAvailable && options.isNotEmpty;
+    // A level is usable only once it genuinely holds values, and never while the
+    // owning page is producing an export file for the current context.
+    final hasOptions = context.hierarchyAvailable && options.isNotEmpty;
+    final enabled = hasOptions && this.enabled;
 
     return AppFormDropdown<int>(
       key: Key('hod-context-dropdown-${level.name}'),

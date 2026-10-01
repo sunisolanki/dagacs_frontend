@@ -14,6 +14,7 @@ class HodDateFilterBar extends StatelessWidget {
     super.key,
     required this.context,
     required this.onRangeChanged,
+    this.enabled = true,
   });
 
   final HodAcademicContext context;
@@ -22,7 +23,16 @@ class HodDateFilterBar extends StatelessWidget {
   /// range is invalid, mirroring the previous request-blocking behaviour.
   final VoidCallback onRangeChanged;
 
+  /// Whether the date controls accept input.
+  ///
+  /// <b>Phase 4A.</b> A page producing an export file sets this to false for the
+  /// duration of the generation, so the applied range provably cannot change
+  /// while a file is being produced for the old range. Defaults to true, so
+  /// every existing caller keeps its exact behaviour.
+  final bool enabled;
+
   Future<void> _pickStart(BuildContext buildContext) async {
+    if (!enabled) return;
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: buildContext,
@@ -38,6 +48,7 @@ class HodDateFilterBar extends StatelessWidget {
   }
 
   Future<void> _pickEnd(BuildContext buildContext) async {
+    if (!enabled) return;
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: buildContext,
@@ -53,6 +64,7 @@ class HodDateFilterBar extends StatelessWidget {
   }
 
   void _clear() {
+    if (!enabled) return;
     context.clearDates();
     onRangeChanged();
   }
@@ -75,7 +87,7 @@ class HodDateFilterBar extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   key: const Key('start-date-button'),
-                  onPressed: () => _pickStart(context),
+                  onPressed: enabled ? () => _pickStart(context) : null,
                   icon: const Icon(Icons.date_range),
                   label: Text(
                     this.context.startDate == null
@@ -88,7 +100,7 @@ class HodDateFilterBar extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   key: const Key('end-date-button'),
-                  onPressed: () => _pickEnd(context),
+                  onPressed: enabled ? () => _pickEnd(context) : null,
                   icon: const Icon(Icons.date_range),
                   label: Text(
                     this.context.endDate == null
@@ -101,7 +113,7 @@ class HodDateFilterBar extends StatelessWidget {
                 const SizedBox(width: DagacsSpace.xs),
                 IconButton(
                   key: const Key('clear-dates-button'),
-                  onPressed: _clear,
+                  onPressed: enabled ? _clear : null,
                   tooltip: 'Clear dates',
                   icon: const Icon(Icons.clear),
                 ),
@@ -111,12 +123,14 @@ class HodDateFilterBar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: DagacsSpace.xs),
             child: Text(
-              invalid
-                  ? 'Start date must not be after end date.'
-                  : 'The selected range applies to this view.',
+              !enabled
+                  ? 'The academic context is locked while a report is being exported.'
+                  : invalid
+                      ? 'Start date must not be after end date.'
+                      : 'The selected range applies to this view.',
               key: const Key('hod-date-filter-hint'),
               style: TextStyle(
-                color: invalid ? Colors.red : DagacsColors.textSecondary,
+                color: invalid && enabled ? Colors.red : DagacsColors.textSecondary,
                 fontSize: 12,
               ),
             ),

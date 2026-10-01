@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/context/hod_academic_context.dart';
+import '../../core/hod_report_export_kind.dart';
 import '../../core/session/session_controller.dart';
 import '../../core/theme/dagacs_theme.dart';
 import '../../models/hod_student_attendance_detail.dart';
@@ -69,6 +70,9 @@ class _HodStudentDetailScreenState extends State<HodStudentDetailScreen> {
       _loading = true;
       _error = null;
       _scopeViolation = false;
+      // The previously-loaded context is no longer what the screen shows, so it
+      // must not be exportable while the new selection is still loading.
+      _loadedContext = null;
     });
     try {
       final ctx = widget.academicContext;
@@ -86,6 +90,17 @@ class _HodStudentDetailScreenState extends State<HodStudentDetailScreen> {
       setState(() {
         _detail = detail;
         _loading = false;
+        // Snapshot the context this data belongs to, so an export can never be
+        // produced for a context the screen is no longer showing.
+        _loadedContext = HodExportContext(
+          academicSessionId: ctx.academicSessionId,
+          programId: ctx.programId,
+          semesterId: ctx.semesterId,
+          sectionId: ctx.sectionId,
+          subjectId: ctx.subjectId,
+          startDate: ctx.startDate,
+          endDate: ctx.endDate,
+        );
       });
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -117,7 +132,13 @@ class _HodStudentDetailScreenState extends State<HodStudentDetailScreen> {
       subtitle: 'Subject-wise attendance of one student in this context.',
       icon: Icons.person_search_outlined,
       onRangeChanged: _load,
+      // Phase 4A: a context change must reload the detail, exactly as a date
+      // change does. Without it the screen kept showing the previous section's
+      // student while the context bar displayed the new one.
+      onContextChanged: _load,
       hierarchyLoader: widget.hierarchyLoader,
+      // Locked for the duration of a generation.
+      controlsEnabled: !_exportBusy,
       body: Column(
         children: [
           Padding(
@@ -130,6 +151,10 @@ class _HodStudentDetailScreenState extends State<HodStudentDetailScreen> {
               disabledReason: _detail == null
                   ? 'The student report is still loading.'
                   : null,
+              reportLabel: HodReportExportKind.studentList.label,
+              onBusyChanged: (busy) {
+                if (mounted) setState(() => _exportBusy = busy);
+              },
               onExport: (format) => _export(format.name),
             ),
           ),
@@ -139,10 +164,23 @@ class _HodStudentDetailScreenState extends State<HodStudentDetailScreen> {
     );
   }
 
+  /// True while a file is being generated; locks the academic context.
+  bool _exportBusy = false;
+
+  /// The context the detail on screen was actually loaded for.
+  ///
+  /// <b>Phase 4A.</b> The export used to read the live academic context at click
+  /// time, so switching section between a load and an export produced a file for
+  /// the new section while the screen still showed the old one's data.
+  HodExportContext? _loadedContext;
+
   /// Exports this student's report, using the context the loaded detail belongs
   /// to. The report is the same data the screen shows, from the same endpoint.
   Future<String> _export(String format) async {
-    final ctx = widget.academicContext;
+    final ctx = _loadedContext;
+    if (ctx == null) {
+      throw StateError('The student report is still loading. Try again in a moment.');
+    }
     final payload = await widget.repository.exportStudent(
       format,
       studentId: widget.studentId,

@@ -24,9 +24,30 @@ const String kHodStudentContextRequiredMessage =
     'Select Academic Session, Program, Semester and Section to view this '
     'report.';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shared states
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+/// What a report panel has actually loaded, for the export summary strip.
+///
+/// <b>No API call is involved.</b> A panel already holds the data it rendered, so
+/// it publishes the counts it already computed and the export strip shows them.
+/// Asking the server again "just for the preview" would be a second request that
+/// could return a different moment in time, which is precisely the data drift
+/// Phase 4A exists to eliminate.
+@immutable
+class HodReportSummary {
+  const HodReportSummary({this.studentCount, this.subjectCount});
+
+  /// Distinct students in the loaded report, when the report has any.
+  final int? studentCount;
+
+  /// Distinct subjects in the loaded report, when the report has any.
+  final int? subjectCount;
+
+  /// A summary that says nothing, for a report with no countable population.
+  static const HodReportSummary none = HodReportSummary();
+}
 
 /// The "no academic context yet" state, shared by every context-bound report.
 ///
@@ -157,9 +178,9 @@ class HodMetricTile extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Attendance overview
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The academic-context attendance overview.
 ///
@@ -175,6 +196,7 @@ class HodAttendanceOverviewPanel extends StatefulWidget {
     required this.academicContext,
     this.reloadToken = 0,
     this.onReportLoaded,
+    this.onReportSummary,
     this.onOpenStudent,
     this.onOpenSubject,
   });
@@ -191,6 +213,13 @@ class HodAttendanceOverviewPanel extends StatefulWidget {
   /// the exact academic context this data belongs to, so a file can never be
   /// produced for a context the screen is not currently showing.
   final VoidCallback? onReportLoaded;
+
+  /// Called with the counts the panel just loaded, for the export summary strip.
+  ///
+  /// <b>Phase 4A, purely additive.</b> [onReportLoaded] is unchanged, so every
+  /// existing caller keeps compiling and behaving identically; a host that only
+  /// cares about the load signal simply never passes this.
+  final ValueChanged<HodReportSummary>? onReportSummary;
 
   final ValueChanged<int>? onOpenStudent;
   final ValueChanged<int>? onOpenSubject;
@@ -243,6 +272,12 @@ class _HodAttendanceOverviewPanelState extends State<HodAttendanceOverviewPanel>
         _loading = false;
       });
       widget.onReportLoaded?.call();
+      // Phase 4A: the report's own figures, so the export strip previews the
+      // exact dataset the file will contain. No second request is made.
+      widget.onReportSummary?.call(HodReportSummary(
+        studentCount: overview.totalStudents,
+        subjectCount: overview.subjects.length,
+      ));
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -506,9 +541,9 @@ class _HodAttendanceOverviewPanelState extends State<HodAttendanceOverviewPanel>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Attendance matrix
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The HOD attendance cross-tab for a fully-resolved academic context.
 ///
@@ -523,6 +558,7 @@ class HodAttendanceMatrixPanel extends StatefulWidget {
     required this.academicContext,
     this.reloadToken = 0,
     this.onReportLoaded,
+    this.onReportSummary,
     this.onOpenStudent,
     this.showContextRequired = true,
   });
@@ -537,6 +573,13 @@ class HodAttendanceMatrixPanel extends StatefulWidget {
   /// the exact academic context this data belongs to, so a file can never be
   /// produced for a context the screen is not currently showing.
   final VoidCallback? onReportLoaded;
+
+  /// Called with the counts the panel just loaded, for the export summary strip.
+  ///
+  /// <b>Phase 4A, purely additive.</b> [onReportLoaded] is unchanged, so every
+  /// existing caller keeps compiling and behaving identically; a host that only
+  /// cares about the load signal simply never passes this.
+  final ValueChanged<HodReportSummary>? onReportSummary;
 
   /// Invoked with the tapped student's id. A row is only tappable when a
   /// callback is supplied, so the affordance never leads nowhere.
@@ -626,6 +669,12 @@ class _HodAttendanceMatrixPanelState extends State<HodAttendanceMatrixPanel> {
         _loading = false;
       });
       widget.onReportLoaded?.call();
+      // Phase 4A: the report's own figures, so the export strip previews the
+      // exact dataset the file will contain. No second request is made.
+      widget.onReportSummary?.call(HodReportSummary(
+        studentCount: matrix.students.length,
+        subjectCount: matrix.subjects.length,
+      ));
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -717,7 +766,7 @@ class _HodAttendanceMatrixPanelState extends State<HodAttendanceMatrixPanel> {
           const SizedBox(width: DagacsSpace.sm),
           Expanded(
             child: Text(
-              '$label · ${matrix.totalElements} student(s)',
+              '$label Â· ${matrix.totalElements} student(s)',
               key: const Key('hod-matrix-summary'),
               style: DagacsTextStyles.caption,
             ),
@@ -757,15 +806,15 @@ class _HodAttendanceMatrixPanelState extends State<HodAttendanceMatrixPanel> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Student attendance
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The students of the selected academic context with their overall attendance,
 /// each tappable through to the subject-wise detail.
 ///
 /// Built on the attendance matrix so a HOD sees the same totals, the same
-/// threshold and the same "no conducted class" handling as the cross-tab —
+/// threshold and the same "no conducted class" handling as the cross-tab â€”
 /// one source of truth, not a second, looser student aggregate.
 class HodStudentAttendancePanel extends StatefulWidget {
   const HodStudentAttendancePanel({
@@ -774,6 +823,7 @@ class HodStudentAttendancePanel extends StatefulWidget {
     required this.academicContext,
     this.reloadToken = 0,
     this.onReportLoaded,
+    this.onReportSummary,
     this.onOpenStudent,
   });
 
@@ -787,6 +837,13 @@ class HodStudentAttendancePanel extends StatefulWidget {
   /// the exact academic context this data belongs to, so a file can never be
   /// produced for a context the screen is not currently showing.
   final VoidCallback? onReportLoaded;
+
+  /// Called with the counts the panel just loaded, for the export summary strip.
+  ///
+  /// <b>Phase 4A, purely additive.</b> [onReportLoaded] is unchanged, so every
+  /// existing caller keeps compiling and behaving identically; a host that only
+  /// cares about the load signal simply never passes this.
+  final ValueChanged<HodReportSummary>? onReportSummary;
   final ValueChanged<int>? onOpenStudent;
 
   @override
@@ -842,6 +899,12 @@ class _HodStudentAttendancePanelState extends State<HodStudentAttendancePanel> {
         _loading = false;
       });
       widget.onReportLoaded?.call();
+      // Phase 4A: the report's own figures, so the export strip previews the
+      // exact dataset the file will contain. No second request is made.
+      widget.onReportSummary?.call(HodReportSummary(
+        studentCount: matrix.students.length,
+        subjectCount: matrix.subjects.length,
+      ));
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -883,7 +946,7 @@ class _HodStudentAttendancePanelState extends State<HodStudentAttendancePanel> {
             title: Text('${row.studentName} (${row.identity})'),
             subtitle: Text(
               '${row.totalPresent} / ${row.totalClasses} conducted'
-              '${row.sectionName.isEmpty ? '' : ' · Section ${row.sectionName}'}',
+              '${row.sectionName.isEmpty ? '' : ' Â· Section ${row.sectionName}'}',
             ),
             trailing: Text(
               formatHodPercentage(row.overallPercentage),
@@ -899,9 +962,9 @@ class _HodStudentAttendancePanelState extends State<HodStudentAttendancePanel> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Subject attendance
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The subjects of the selected academic context with their faculty, classes and
 /// attendance, each tappable through to the student-wise detail.
@@ -912,6 +975,7 @@ class HodSubjectAttendancePanel extends StatefulWidget {
     required this.academicContext,
     this.reloadToken = 0,
     this.onReportLoaded,
+    this.onReportSummary,
     this.onOpenSubject,
   });
 
@@ -925,6 +989,13 @@ class HodSubjectAttendancePanel extends StatefulWidget {
   /// the exact academic context this data belongs to, so a file can never be
   /// produced for a context the screen is not currently showing.
   final VoidCallback? onReportLoaded;
+
+  /// Called with the counts the panel just loaded, for the export summary strip.
+  ///
+  /// <b>Phase 4A, purely additive.</b> [onReportLoaded] is unchanged, so every
+  /// existing caller keeps compiling and behaving identically; a host that only
+  /// cares about the load signal simply never passes this.
+  final ValueChanged<HodReportSummary>? onReportSummary;
   final ValueChanged<int>? onOpenSubject;
 
   @override
@@ -975,6 +1046,11 @@ class _HodSubjectAttendancePanelState extends State<HodSubjectAttendancePanel> {
         _loading = false;
       });
       widget.onReportLoaded?.call();
+      // Phase 4A: the report's own figures, so the export strip previews the
+      // exact dataset the file will contain. No second request is made.
+      widget.onReportSummary?.call(HodReportSummary(
+        subjectCount: overview.subjects.length,
+      ));
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -1018,7 +1094,7 @@ class _HodSubjectAttendancePanelState extends State<HodSubjectAttendancePanel> {
               subject.facultyLabel,
               '${subject.classesConducted} class(es) conducted',
               '${subject.presentCount} / ${subject.totalClasses} conducted',
-            ].join(' · ')),
+            ].join(' Â· ')),
             trailing: Text(
               formatHodPercentage(subject.percentage),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1032,9 +1108,9 @@ class _HodSubjectAttendancePanelState extends State<HodSubjectAttendancePanel> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Low attendance
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// The context-scoped low-attendance report with the subjects responsible.
 ///
@@ -1049,6 +1125,7 @@ class HodLowAttendancePanel extends StatefulWidget {
     required this.academicContext,
     this.reloadToken = 0,
     this.onReportLoaded,
+    this.onReportSummary,
     this.onOpenStudent,
   });
 
@@ -1062,6 +1139,13 @@ class HodLowAttendancePanel extends StatefulWidget {
   /// the exact academic context this data belongs to, so a file can never be
   /// produced for a context the screen is not currently showing.
   final VoidCallback? onReportLoaded;
+
+  /// Called with the counts the panel just loaded, for the export summary strip.
+  ///
+  /// <b>Phase 4A, purely additive.</b> [onReportLoaded] is unchanged, so every
+  /// existing caller keeps compiling and behaving identically; a host that only
+  /// cares about the load signal simply never passes this.
+  final ValueChanged<HodReportSummary>? onReportSummary;
   final ValueChanged<int>? onOpenStudent;
 
   @override
@@ -1113,6 +1197,11 @@ class _HodLowAttendancePanelState extends State<HodLowAttendancePanel> {
         _loading = false;
       });
       widget.onReportLoaded?.call();
+      // Phase 4A: the report's own figures, so the export strip previews the
+      // exact dataset the file will contain. No second request is made.
+      widget.onReportSummary?.call(HodReportSummary(
+        studentCount: report.students.length,
+      ));
     } on ApiException {
       if (!mounted) return;
       setState(() {
@@ -1153,7 +1242,7 @@ class _HodLowAttendancePanelState extends State<HodLowAttendancePanel> {
               child: Text(
                 'Below the fixed '
                 '${report?.thresholdPercentage?.toStringAsFixed(1) ?? '75.0'}% '
-                'threshold · ${report?.belowThresholdCount ?? 0} of '
+                'threshold Â· ${report?.belowThresholdCount ?? 0} of '
                 '${report?.totalStudents ?? 0} students in context',
                 key: const Key('hod-low-attendance-summary'),
                 style: DagacsTextStyles.caption,
@@ -1205,7 +1294,7 @@ class _HodLowAttendancePanelState extends State<HodLowAttendancePanel> {
                 if (student.semesterName != null) student.semesterName!,
                 if (student.sectionName.isNotEmpty) student.sectionName,
                 '${student.presentCount} / ${student.totalClasses} conducted',
-              ].join(' · '),
+              ].join(' Â· '),
               style: DagacsTextStyles.caption,
             ),
             if (student.hasBreakdown) ...[

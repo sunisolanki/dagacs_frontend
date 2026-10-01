@@ -304,6 +304,50 @@ class HodAttendanceRepository {
     return _download(path, 'dagacs_hod_attendance_low.$format');
   }
 
+  /// Downloads the multi-sheet Context Pack for the selected context.
+  ///
+  /// Phase 4B. One workbook holding the executive summary, the attendance
+  /// matrix, the low-attendance report, the subject summary and the student
+  /// summary - all computed by the same canonical report service, so the Pack
+  /// cannot disagree with any single report.
+  ///
+  /// <b>It is not a report section.</b> It describes the whole academic context
+  /// rather than whichever section is on screen, which is why it takes the same
+  /// academic context the reports do and is deliberately absent from
+  /// [HodReportExportKind] - adding it there would put a bundle into the closed
+  /// set that maps a section to its own file.
+  ///
+  /// <b>The full four-level context is required</b>, because the pack contains a
+  /// cross-tab. A partial selection is refused with the same message the matrix
+  /// uses rather than silently widening to the whole department.
+  ///
+  /// The whole workbook is always unpaged, and no department is ever sent: the
+  /// server derives it from the token and proves every supplied id belongs to it.
+  Future<DownloadPayload> exportContextPack(
+    String format, {
+    int? academicSessionId,
+    int? programId,
+    int? semesterId,
+    int? sectionId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) {
+    if (academicSessionId == null ||
+        programId == null ||
+        semesterId == null ||
+        sectionId == null) {
+      throw const ApiException.badRequest(matrixContextRequiredMessage);
+    }
+    final path = _query('/hod/attendance/context-pack/export.$format',
+        academicSessionId: academicSessionId,
+        programId: programId,
+        semesterId: semesterId,
+        sectionId: sectionId,
+        startDate: startDate,
+        endDate: endDate);
+    return _download(path, 'dagacs_hod_attendance_context_pack.$format');
+  }
+
   // ── Internal helpers ─────────────────────────────────────────────────
 
   String _query(

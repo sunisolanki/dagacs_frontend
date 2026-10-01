@@ -35,6 +35,7 @@ class HodScaffold extends StatelessWidget {
     this.onRangeChanged,
     this.hierarchyLoader,
     this.onContextChanged,
+    this.controlsEnabled = true,
   });
 
   final SessionController session;
@@ -53,6 +54,17 @@ class HodScaffold extends StatelessWidget {
 
   /// Fired after any academic-context level changes, so the page can refetch.
   final VoidCallback? onContextChanged;
+
+  /// Whether the context bar and the date filter accept input.
+  ///
+  /// <b>Phase 4A.</b> A page that is producing an export file sets this to false
+  /// for the duration of the generation. Without it a HOD could switch section
+  /// while a request is in flight, and the file would be produced for the old
+  /// section while the screen already showed the new one. The lock is what turns
+  /// that race from "possible" into "not expressible".
+  ///
+  /// Defaults to true, so every existing caller keeps its exact behaviour.
+  final bool controlsEnabled;
 
   final Widget body;
 
@@ -89,6 +101,7 @@ class HodScaffold extends StatelessWidget {
                       child: HodContextBar(
                         context: academicContext,
                         loader: hierarchyLoader,
+                        enabled: controlsEnabled,
                         onLevelChanged: (_) => onContextChanged?.call(),
                       ),
                     ),
@@ -105,6 +118,7 @@ class HodScaffold extends StatelessWidget {
                         maxWidth: 1120,
                         child: HodDateFilterBar(
                           context: academicContext,
+                          enabled: controlsEnabled,
                           onRangeChanged: onRangeChanged!,
                         ),
                       ),

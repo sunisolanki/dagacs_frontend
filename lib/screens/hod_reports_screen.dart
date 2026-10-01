@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/context/hod_academic_context.dart';
+import '../core/hod_report_export_kind.dart';
 import '../core/session/session_controller.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../models/hod_coverage_row.dart';
@@ -86,15 +87,14 @@ class _ReportOption {
 
 /// Context report sections.
 ///
-/// The keys are deliberately prefixed: the pre-existing department report types
-/// keep their own keys, and sharing one (notably `low-attendance`) would make a
-/// section switch ambiguous and silently send the reader to the other report.
-const _contextReportOptions = [
-  _ReportOption('context-overview', 'Attendance Overview'),
-  _ReportOption('context-matrix', 'Attendance Matrix'),
-  _ReportOption('context-students', 'Student Attendance'),
-  _ReportOption('context-subjects', 'Subject Attendance'),
-  _ReportOption('context-low-attendance', 'Low Attendance'),
+/// The keys come from [HodReportExportKind], so the section a reader selects and
+/// the report an export button downloads can never drift apart. They are
+/// deliberately prefixed: the pre-existing department report types keep their own
+/// keys, and sharing one (notably `low-attendance`) would make a section switch
+/// ambiguous and silently send the reader to the other report.
+final List<_ReportOption> _contextReportOptions = [
+  for (final kind in HodReportExportKind.values)
+    _ReportOption(kind.reportType, kind.label),
 ];
 
 const _departmentReportOptions = [
@@ -103,6 +103,24 @@ const _departmentReportOptions = [
   _ReportOption('monthly', 'Monthly'),
   _ReportOption('quarterly', 'Quarterly'),
   _ReportOption('low-attendance', 'Low Attendance'),
+];
+
+/// The name the Pack button uses on screen and in its tooltip.
+///
+/// <b>Deliberately not a [HodReportExportKind].</b> The Pack is not one of the
+/// five reports - it is a workbook bundling several of them - so putting it in
+/// that closed set would either make it a sixth "report type" or break the
+/// mapping the enum guarantees. Naming it here keeps the set at exactly five.
+const String contextPackLabel = 'Attendance Context Pack';
+
+/// The sheets the Pack contains, stated on the button so a HOD knows what they
+/// are about to download before spending the wait.
+const List<String> contextPackSheets = [
+  'Executive Summary',
+  'Attendance Matrix',
+  'Low Attendance',
+  'Subject Summary',
+  'Student Summary',
 ];
 
 class _HodReportsScreenState extends State<HodReportsScreen> {
@@ -222,15 +240,39 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
     }
   }
 
-  /// A context or date change invalidates the export snapshot in the same state
+  /// A context level change invalidates the export snapshot in the same state
   /// update that refetches the report, so the export control is disabled again
   /// until the newly-selected context has actually loaded. Without this, a HOD
   /// could export the new context while still looking at the old data.
+  ///
+  /// <b>It deliberately does not refetch the department reports.</b> Those are
+  /// department-wide and take no academic level, so a section switch cannot
+  /// change what they return - refetching would be a pointless request.
   void _onContextChanged() => setState(() {
         _reloadToken++;
-        _loadedContext = null;
-        _loadedAt = null;
+        _invalidateExportSnapshot();
       });
+
+  /// A date-range change additionally refetches the department reports.
+  ///
+  /// <b>Phase 4A.</b> These reports read the applied range from the shared
+  /// academic context ([_effectiveStart] / [_effectiveEnd]), so without a reload
+  /// the screen would keep showing rows filtered by the <i>previous</i> range
+  /// while the date bar displayed the new one. `_load` is a no-op for a context
+  /// report, which loads through its own panel, so this is safe for both.
+  void _onRangeChanged() {
+    setState(() {
+      _reloadToken++;
+      _invalidateExportSnapshot();
+    });
+    _load();
+  }
+
+  void _invalidateExportSnapshot() {
+    _loadedContext = null;
+    _loadedAt = null;
+    _summary = HodReportSummary.none;
+  }
 
   Future<void> _pickStartDate() async {
     final now = DateTime.now();
@@ -282,6 +324,12 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
       _coverage = null;
       _rollups = null;
       _low = null;
+      // Switching sections invalidates the export snapshot, so the control is
+      // disabled again until the newly selected report has actually loaded.
+      // Without this the previous section's file could be produced from a chip
+      // tap alone - the wrong-report bug in its purest form.
+      _reloadToken++;
+      _invalidateExportSnapshot();
     });
     _load();
   }
@@ -343,6 +391,20 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
   /// that impossible, and the control stays disabled until a load succeeds.
   HodExportContext? _loadedContext;
 
+  /// What the loaded panel reported it is showing, for the export summary strip.
+  ///
+  /// Published by the panel from the data it already holds, so it costs no extra
+  /// request and cannot describe a different moment in time.
+  HodReportSummary _summary = HodReportSummary.none;
+
+  /// True while an export file is being generated.
+  ///
+  /// Drives [HodScaffold.controlsEnabled], which locks the academic-context bar
+  /// and the date filter for the duration. Without it a HOD could switch section
+  /// mid-request and the file would be produced for the old context while the
+  /// screen already showed the new one.
+  bool _exportBusy = false;
+
   void _onReportLoaded() {
     final ctx = widget.academicContext;
     if (ctx == null) return;
@@ -360,13 +422,23 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
     });
   }
 
+  /// Adopts the panel's own counts so the strip previews the real dataset.
+  void _onReportSummary(HodReportSummary summary) {
+    if (!mounted) return;
+    setState(() => _summary = summary);
+  }
+
   /// Exports the report the HOD is actually looking at.
   ///
   /// Phase 4A fixes a real defect here: every academic-context report used to be
   /// routed to the matrix exporter, so choosing "Attendance Overview" and
-  /// clicking Excel silently produced the attendance matrix. The dispatch is now
-  /// per report type, and the filename, the endpoint and the on-screen data all
-  /// come from the same snapshot.
+  /// clicking Excel silently produced the attendance matrix.
+  ///
+  /// <b>There is deliberately no default branch.</b> [HodReportExportKind] is a
+  /// closed set and this switch covers every one of its members, so adding a
+  /// sixth report type is a compile error rather than a silently wrong file -
+  /// which is the only way this bug stays fixed. The two list sections are
+  /// refused explicitly, with the action that would let a HOD export them.
   Future<String> _exportContextReport(String format) async {
     final repository = widget.attendanceRepository;
     final ctx = _loadedContext;
@@ -374,7 +446,16 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
       throw const ApiException.badRequest(
           'The report is still loading. Try again in a moment.');
     }
-    if (_reportType == 'context-matrix' &&
+
+    final kind = HodReportExportKind.forReportType(_reportType);
+    if (kind == null) {
+      throw StateError('This report cannot be exported.');
+    }
+    if (!kind.isExportableFromHub) {
+      throw StateError(kind.openAnEntityToExportMessage);
+    }
+
+    if (kind == HodReportExportKind.matrix &&
         (ctx.academicSessionId == null ||
             ctx.programId == null ||
             ctx.semesterId == null ||
@@ -383,10 +464,11 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
           HodAttendanceRepository.matrixContextRequiredMessage);
     }
 
-    final extension = format;
-    final payload = await switch (_reportType) {
-      'context-matrix' => repository.exportMatrix(
-          extension,
+    final payload = await switch (kind) {
+      // A cross-tab needs the full four-level context; the repository enforces
+      // the same rule, so the guard above only saves a pointless round trip.
+      HodReportExportKind.matrix => repository.exportMatrix(
+          format,
           academicSessionId: ctx.academicSessionId,
           programId: ctx.programId,
           semesterId: ctx.semesterId,
@@ -395,8 +477,9 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
           startDate: ctx.startDate,
           endDate: ctx.endDate,
         ),
-      'context-low-attendance' => repository.exportLowAttendance(
-          extension,
+      // A context-wide subject summary. Never the matrix - that was the bug.
+      HodReportExportKind.overview => repository.exportOverview(
+          format,
           academicSessionId: ctx.academicSessionId,
           programId: ctx.programId,
           semesterId: ctx.semesterId,
@@ -404,8 +487,9 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
           startDate: ctx.startDate,
           endDate: ctx.endDate,
         ),
-      _ => repository.exportOverview(
-          extension,
+      // The canonical threshold report, with the subjects responsible.
+      HodReportExportKind.lowAttendance => repository.exportLowAttendance(
+          format,
           academicSessionId: ctx.academicSessionId,
           programId: ctx.programId,
           semesterId: ctx.semesterId,
@@ -413,6 +497,11 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
           startDate: ctx.startDate,
           endDate: ctx.endDate,
         ),
+      // Unreachable: refused above with an actionable message. Listed so the
+      // compiler enforces that a new kind is handled deliberately.
+      HodReportExportKind.studentList ||
+      HodReportExportKind.subjectList =>
+        throw StateError(kind.openAnEntityToExportMessage),
     };
     return widget.downloadFile(
         payload.bytes, payload.fileName, payload.contentType);
@@ -426,10 +515,8 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
   /// exactly the kind of wrong-file bug Phase 4A exists to remove. Each of those
   /// reports is exported from its own detail screen, where the entity is the one
   /// the HOD actually opened.
-  static const Set<String> _hubExportableReports = {
-    'context-overview',
-    'context-matrix',
-    'context-low-attendance',
+  static final Set<String> _hubExportableReports = {
+    for (final kind in HodReportExportKind.exportableFromHub) kind.reportType,
   };
 
   String? _exportBlockedReason() {
@@ -441,9 +528,9 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
         return 'The report is still loading. Export is available once it has loaded.';
       }
       if (!_hubExportableReports.contains(_reportType)) {
-        return _reportType == 'context-students'
-            ? 'Open a student to export that student\'s attendance report.'
-            : 'Open a subject to export that subject\'s attendance report.';
+        final kind = HodReportExportKind.forReportType(_reportType);
+        return kind?.openAnEntityToExportMessage ??
+            'This report cannot be exported from here.';
       }
       if (_datesInvalid) {
         return 'Start date must not be after end date.';
@@ -492,7 +579,10 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
       icon: Icons.assessment_outlined,
       hierarchyLoader: widget.hierarchyLoader,
       onContextChanged: _onContextChanged,
-      onRangeChanged: _onContextChanged,
+      onRangeChanged: _onRangeChanged,
+      // Locked for the duration of a generation, so the context and the range
+      // provably cannot change while a file is being produced for them.
+      controlsEnabled: !_exportBusy,
       body: Column(
         children: [
           Expanded(child: _buildReportArea()),
@@ -535,6 +625,7 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
                 academicContext: academicContext,
                 reloadToken: _reloadToken,
                 onReportLoaded: _onReportLoaded,
+                onReportSummary: _onReportSummary,
                 onOpenStudent: widget.onOpenStudent,
               ),
             'context-students' => HodStudentAttendancePanel(
@@ -542,6 +633,7 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
                 academicContext: academicContext,
                 reloadToken: _reloadToken,
                 onReportLoaded: _onReportLoaded,
+                onReportSummary: _onReportSummary,
                 onOpenStudent: widget.onOpenStudent,
               ),
             'context-subjects' => HodSubjectAttendancePanel(
@@ -549,6 +641,7 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
                 academicContext: academicContext,
                 reloadToken: _reloadToken,
                 onReportLoaded: _onReportLoaded,
+                onReportSummary: _onReportSummary,
                 onOpenSubject: widget.onOpenSubject,
               ),
             'context-low-attendance' => HodLowAttendancePanel(
@@ -556,6 +649,7 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
                 academicContext: academicContext,
                 reloadToken: _reloadToken,
                 onReportLoaded: _onReportLoaded,
+                onReportSummary: _onReportSummary,
                 onOpenStudent: widget.onOpenStudent,
               ),
             _ => HodAttendanceOverviewPanel(
@@ -563,6 +657,7 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
                 academicContext: academicContext,
                 reloadToken: _reloadToken,
                 onReportLoaded: _onReportLoaded,
+                onReportSummary: _onReportSummary,
                 onOpenStudent: widget.onOpenStudent,
                 onOpenSubject: widget.onOpenSubject,
               ),
@@ -701,23 +796,42 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
 
   Widget _buildExportBar() {
     // Phase 4A: the academic-context reports use the professional export control,
-    // which owns the idle/generating/success/failure lifecycle and is disabled
-    // until the report has actually loaded. The pre-existing department reports
-    // keep their own two buttons, unchanged.
+    // which owns the idle/generating/success/failure lifecycle, names the report
+    // it will actually download, and is disabled until the report has loaded. The
+    // pre-existing department reports keep their own two buttons, unchanged.
     if (_isContextReport) {
       final blocked = _exportBlockedReason();
       return Padding(
         padding: const EdgeInsets.fromLTRB(
             DagacsSpace.md, DagacsSpace.xs, DagacsSpace.md, DagacsSpace.sm),
-        child: HodExportBar(
-          enabled: blocked == null,
-          disabledReason: blocked,
-          showPack: _reportType == 'context-matrix',
-          leading: HodExportSummaryStrip(
-            rangeText: _rangeText,
-            generatedAt: _loadedAt,
-          ),
-          onExport: (format) => _exportContextReport(format.name),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            HodExportBar(
+              enabled: blocked == null,
+              disabledReason: blocked,
+              reportLabel: _activeReportLabel,
+              onBusyChanged: (busy) {
+                if (mounted) setState(() => _exportBusy = busy);
+              },
+              leading: HodExportSummaryStrip(
+                subjectCount: _summary.subjectCount,
+                studentCount: _summary.studentCount,
+                rangeText: _rangeText,
+                generatedAt: _loadedAt,
+              ),
+              onExport: (format) => _exportContextReport(format.name),
+            ),
+            // Phase 4B: the Context Pack.
+            //
+            // <b>It lives on the hub, not inside HodExportBar.</b> The bar is the
+            // per-report control Phase 4A froze, and its tests assert that it
+            // offers exactly two formats and no third control. The Pack is not a
+            // third format of the selected report either - it is a bundle of the
+            // whole context - so adding it to the bar would have bent the
+            // section-to-file guarantee that Phase 4A exists to protect.
+            _buildContextPackButton(blocked),
+          ],
         ),
       );
     }
@@ -736,6 +850,92 @@ class _HodReportsScreenState extends State<HodReportsScreen> {
         ],
       ),
     );
+  }
+
+  /// The name of the report the export control is currently offering.
+///
+/// The button is disabled for the same reasons the per-report export is - the
+/// report has not loaded, the dates are inverted, or the full four-level context
+/// has not been chosen - and it exports the same [_loadedContext] the on-screen
+/// report was rendered from, so the workbook provably describes what the reader
+/// is looking at rather than whatever they selected mid-generation.
+Widget _buildContextPackButton(String? blocked) {
+  final repository = widget.attendanceRepository;
+  // The two list sections have no single entity, and the pack needs a full
+  // context, so it is offered only where a full context can exist.
+  final contextComplete = _loadedContext?.hasFullContext ?? false;
+  final packBlockedReason = blocked ??
+      (repository == null
+          ? 'Academic context reports are not available.'
+          : 'Choose Academic Session, Program, Semester and Section to build the '
+              '${contextPackLabel.toLowerCase()}.');
+
+  return Padding(
+    padding: const EdgeInsets.only(top: DagacsSpace.xs),
+    child: _ContextPackButton(
+      blockedReason: contextComplete ? null : packBlockedReason,
+      busy: _exportBusy,
+      onPressed: () => _exportContextPack(),
+    ),
+  );
+}
+
+/// Generates the Context Pack for the loaded snapshot.
+Future<void> _exportContextPack() async {
+  if (_exporting) return;
+  final repository = widget.attendanceRepository;
+  final ctx = _loadedContext;
+  if (repository == null || ctx == null) {
+    _showSnack('The report is still loading. Try again in a moment.');
+    return;
+  }
+  // Phase 4B raises BOTH flags. `_exporting` drives this button's own spinner,
+  // and `_exportBusy` is what the Phase 4A scaffold uses to lock the academic
+  // context and the date filter - so the context provably cannot change under an
+  // in-flight workbook generation, exactly as it cannot under a single report.
+  setState(() {
+    _exporting = true;
+    _exportBusy = true;
+  });
+  try {
+    final payload = await repository.exportContextPack(
+      'xlsx',
+      academicSessionId: ctx.academicSessionId,
+      programId: ctx.programId,
+      semesterId: ctx.semesterId,
+      sectionId: ctx.sectionId,
+      startDate: ctx.startDate,
+      endDate: ctx.endDate,
+    );
+    final status = await widget.downloadFile(
+        payload.bytes, payload.fileName, payload.contentType);
+    if (!mounted) return;
+    _showSnack('Downloaded $status');
+  } on ApiException catch (e) {
+    if (!mounted) return;
+    _showSnack(_messageFor(e));
+  } catch (_) {
+    if (!mounted) return;
+    _showSnack('Export failed. Please try again.');
+  } finally {
+    if (mounted) {
+      setState(() {
+        _exporting = false;
+        _exportBusy = false;
+      });
+    }
+  }
+}
+
+/// The name of the report the export control is currently offering.
+  ///
+  /// It comes from the same [HodReportExportKind] that the section chip was
+  /// selected from and that the dispatch switches on, so the label, the endpoint
+  /// and the file can never describe three different reports.
+  String get _activeReportLabel {
+    if (!_isContextReport) return _currentLabel;
+    return HodReportExportKind.forReportType(_reportType)?.label ??
+        'this report';
   }
 
   /// The applied date range, in the same wording the export prints.
@@ -920,4 +1120,60 @@ class _Preview {
 
   final List<DataColumn> columns;
   final List<DataRow> rows;
+}
+
+/// Phase 4B: the Context Pack control.
+///
+/// <b>Separate from [HodExportBar] on purpose.</b> The bar is the per-report
+/// control Phase 4A froze, and it offers exactly the two formats of the selected
+/// report. The Pack is not a third format of that report - it is a separate
+/// workbook bundling several of them - so it gets its own control rather than
+/// being forced into the bar, which would have weakened the guarantee that a
+/// control never advertises a file it does not produce.
+///
+/// It reuses the same disabled/lock contract as the bar: disabled with an
+/// explanatory reason until the report has loaded for a full context, and inert
+/// while a generation is in flight so a double tap cannot start two exports.
+class _ContextPackButton extends StatelessWidget {
+  const _ContextPackButton({
+    required this.blockedReason,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  final String? blockedReason;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  String get _tooltip => blockedReason ??
+      'Download one workbook with ${contextPackSheets.join(', ')} '
+          'for the selected academic context';
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = blockedReason != null || busy;
+    return Semantics(
+      button: true,
+      enabled: !disabled,
+      label: _tooltip,
+      child: Tooltip(
+        message: _tooltip,
+        child: OutlinedButton.icon(
+          key: const Key('hod-export-pack'),
+          onPressed: disabled ? null : onPressed,
+          icon: busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.folder_zip_outlined),
+          label: Text(
+            busy ? 'Building $contextPackLabel…' : 'Context Pack',
+            key: const Key('hod-export-pack-label'),
+          ),
+        ),
+      ),
+    );
+  }
 }

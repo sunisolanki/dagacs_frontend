@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/context/hod_academic_context.dart';
+import '../../core/hod_report_export_kind.dart';
 import '../../core/session/session_controller.dart';
 import '../../core/theme/dagacs_theme.dart';
 import '../../models/hod_low_attendance.dart';
@@ -119,9 +120,12 @@ class _HodLowAttendanceScreenState extends State<HodLowAttendanceScreen> {
       title: 'Low Attendance',
       subtitle: 'Students below the attendance threshold.',
       icon: Icons.warning_amber_outlined,
-      onRangeChanged: _load,
+      onRangeChanged: _onRangeChanged,
       hierarchyLoader: widget.hierarchyLoader,
       onContextChanged: _onContextChanged,
+      // Locked for the duration of a generation so the context cannot change
+      // while a file is being produced for it.
+      controlsEnabled: !_exportBusy,
       body: Column(
         children: [
           Padding(
@@ -134,6 +138,10 @@ class _HodLowAttendanceScreenState extends State<HodLowAttendanceScreen> {
                 ? HodExportBar(
                     enabled: _contextReportLoaded,
                     disabledReason: 'The low-attendance report is still loading.',
+                    reportLabel: HodReportExportKind.lowAttendance.label,
+                    onBusyChanged: (busy) {
+                      if (mounted) setState(() => _exportBusy = busy);
+                    },
                     onExport: (format) => _exportContextReport(format.name),
                   )
                 : const SizedBox.shrink(),
@@ -156,11 +164,40 @@ class _HodLowAttendanceScreenState extends State<HodLowAttendanceScreen> {
 
   bool _contextReportLoaded = false;
 
-  void _onContextReportLoaded() => setState(() => _contextReportLoaded = true);
+  /// True while a file is being generated; locks the academic context.
+  bool _exportBusy = false;
+
+  /// The context the report on screen was actually loaded for.
+  ///
+  /// <b>Phase 4A.</b> The export used to read the live academic context at click
+  /// time, so switching section between a load and an export produced a file for
+  /// the new section while the list still showed the old one.
+  HodExportContext? _loadedContext;
+
+  void _onContextReportLoaded() {
+    if (!mounted) return;
+    final ctx = widget.academicContext;
+    setState(() {
+      _contextReportLoaded = true;
+      _loadedContext = HodExportContext(
+        academicSessionId: ctx.academicSessionId,
+        programId: ctx.programId,
+        semesterId: ctx.semesterId,
+        sectionId: ctx.sectionId,
+        subjectId: ctx.subjectId,
+        startDate: ctx.startDate,
+        endDate: ctx.endDate,
+      );
+    });
+  }
 
   /// Exports the canonical low-attendance report for the selected context.
   Future<String> _exportContextReport(String format) async {
-    final ctx = widget.academicContext;
+    final ctx = _loadedContext;
+    if (ctx == null) {
+      throw StateError(
+          'The low-attendance report is still loading. Try again in a moment.');
+    }
     final payload = await widget.attendanceRepository!.exportLowAttendance(
       format,
       academicSessionId: ctx.academicSessionId,
@@ -189,6 +226,18 @@ class _HodLowAttendanceScreenState extends State<HodLowAttendanceScreen> {
       _contextReloadToken++;
       // A new context must not be exportable until it has actually loaded.
       _contextReportLoaded = false;
+      _loadedContext = null;
+    });
+    if (_usesContextPanel) return;
+    _load();
+  }
+
+  /// A date-range change reloads the panel, and the legacy feed too.
+  void _onRangeChanged() {
+    setState(() {
+      _contextReloadToken++;
+      _contextReportLoaded = false;
+      _loadedContext = null;
     });
     if (_usesContextPanel) return;
     _load();
