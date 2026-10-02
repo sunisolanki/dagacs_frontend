@@ -10,6 +10,9 @@ import '../widgets/dagacs_widgets.dart';
 import '../widgets/attendance_calendar.dart';
 import '../widgets/attendance_date_detail.dart';
 import '../widgets/attendance_subject_chart.dart';
+import '../core/theme/dagacs_theme.dart' show DagacsBreakpoints;
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// M9.14: inline date-range validation message shown when the selected start
 /// date is after the selected end date.
@@ -38,9 +41,14 @@ bool isInvertedDateRange(DateTime? start, DateTime? end) =>
 /// recomputes the percentage.
 class StudentAttendanceScreen extends StatefulWidget {
   const StudentAttendanceScreen(
-      {super.key, required this.attendanceRepository});
+      {super.key, required this.attendanceRepository, this.session});
 
   final AttendanceRepository attendanceRepository;
+
+  /// Phase 5.4: when supplied, the screen is hosted in the shared navigation
+  /// frame so a phone user has a drawer and a route home. Optional so every
+  /// existing construction site keeps working unchanged.
+  final SessionController? session;
 
   @override
   State<StudentAttendanceScreen> createState() =>
@@ -362,22 +370,18 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Attendance'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          children: [
-            _buildDateBar(),
-            _buildOverallCard(),
-            _buildSubjectFilter(),
-            if (_subjectChartData.isNotEmpty && !_chartLoading)
-              _buildSubjectChartSection(),
-            _buildCalendarSection(),
-            if (_selectedDate != null && _selectedDateRecords.isNotEmpty)
-              _buildDateDetailSection(),
+    final body = RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        children: [
+          _buildDateBar(),
+          _buildOverallCard(),
+          _buildSubjectFilter(),
+          if (_subjectChartData.isNotEmpty && !_chartLoading)
+            _buildSubjectChartSection(),
+          _buildCalendarSection(),
+          if (_selectedDate != null && _selectedDateRecords.isNotEmpty)
+            _buildDateDetailSection(),
             if (_selectedDate != null && _selectedDateRecords.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(16),
@@ -395,66 +399,111 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
               ),
             if (_records.isEmpty && _error == null && !_loading)
               _buildEmptyRecords(),
-          ],
-        ),
+        ],
       ),
+    );
+    // Phase 5.4: with a session the screen sits in the shared navigation frame,
+    // so a student on a phone has a way to reach their profile and to get back
+    // to their dashboard. Without one it renders exactly as it always has, which
+    // keeps every existing construction site valid.
+    final session = widget.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Attendance')),
+        body: body,
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'My Attendance',
+      body: body,
     );
   }
 
   Widget _buildDateBar() {
     final hasFilter = _startDate != null || _endDate != null;
+    // Phase 5.4: the two date buttons and the clear control used to share one
+    // Row unconditionally. On a 320 dp phone that left each button about 118 dp
+    // to render an icon plus an ISO date, which clipped the text. Below the
+    // existing narrow breakpoint the buttons stack full width instead, which is
+    // also simply the easier gesture on a phone.
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const Key('start-date-button'),
-                  onPressed: _pickStartDate,
-                  icon: const Icon(Icons.date_range),
-                  label: Text(
-                    _startDate == null ? 'Start date' : _formatDate(_startDate!),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const Key('end-date-button'),
-                  onPressed: _pickEndDate,
-                  icon: const Icon(Icons.date_range),
-                  label: Text(
-                    _endDate == null ? 'End date' : _formatDate(_endDate!),
-                  ),
-                ),
-              ),
-              if (hasFilter) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  key: const Key('clear-dates-button'),
-                  onPressed: _clearDates,
-                  tooltip: 'Clear dates',
-                  icon: const Icon(Icons.clear),
-                ),
-              ],
-            ],
-          ),
-          if (_dateError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _dateError!,
-                key: const Key('date-range-error'),
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < DagacsBreakpoints.narrow;
+          final startButton = OutlinedButton.icon(
+            key: const Key('start-date-button'),
+            onPressed: _pickStartDate,
+            icon: const Icon(Icons.date_range),
+            label: Text(
+              _startDate == null ? 'Start date' : _formatDate(_startDate!),
+              overflow: TextOverflow.ellipsis,
             ),
-        ],
+          );
+          final endButton = OutlinedButton.icon(
+            key: const Key('end-date-button'),
+            onPressed: _pickEndDate,
+            icon: const Icon(Icons.date_range),
+            label: Text(
+              _endDate == null ? 'End date' : _formatDate(_endDate!),
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (stacked)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    startButton,
+                    const SizedBox(height: 8),
+                    endButton,
+                    if (hasFilter) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _clearButton(),
+                      ),
+                    ],
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(child: startButton),
+                    const SizedBox(width: 8),
+                    Expanded(child: endButton),
+                    if (hasFilter) ...[
+                      const SizedBox(width: 4),
+                      _clearButton(),
+                    ],
+                  ],
+                ),
+              if (_dateError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _dateError!,
+                    key: const Key('date-range-error'),
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
+
+  Widget _clearButton() => IconButton(
+        key: const Key('clear-dates-button'),
+        onPressed: _clearDates,
+        tooltip: 'Clear dates',
+        icon: const Icon(Icons.clear),
+      );
 
   String _formatDate(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-'
@@ -471,12 +520,17 @@ class _StudentAttendanceScreenState extends State<StudentAttendanceScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.insights, color: Colors.blue),
                   const SizedBox(width: 8),
-                  Text(
-                    'Overall Attendance',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  // Phase 5.4: see attendance_calendar.dart - the title was an
+                  // inflexible Row child and overflowed on narrow screens.
+                  Expanded(
+                    child: Text(
+                      'Overall Attendance',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ),
                 ],
               ),

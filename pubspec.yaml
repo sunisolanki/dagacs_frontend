@@ -12,6 +12,13 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   file_picker: ^8.1.2
   fl_chart: ^0.66.0
+  # Phase 5.1: a real, user-visible destination for exported reports. Before
+  # this, an export landed in the app's PRIVATE temporary directory while the UI
+  # claimed it had been downloaded - a file the user could never open.
+  path_provider: ^2.1.4
+  # Phase 5.1: lets a user open, send or save an exported report from the phone
+  # itself, which is the only practical way to reach a file on a mobile device.
+  share_plus: ^10.1.2
 
 flutter:
   uses-material-design: true

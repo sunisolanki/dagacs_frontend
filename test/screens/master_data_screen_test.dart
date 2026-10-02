@@ -274,4 +274,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('master-data-departments')), findsOneWidget);
   });
+
+  // ---------------------------------------------------------------------
+  // Phase 5.7 - phone support for the admin module screens.
+  // ---------------------------------------------------------------------
+
+  testWidgets('the hub fits a 320 dp phone and exposes the drawer',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('ADMIN');
+    await tester.pumpWidget(_MasterDataScreenWrapper(
+        session: session,
+        repository: _FakeMasterDataRepository(),
+        teacherManagementRepository: _FakeTeacherManagementRepository()));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull,
+        reason: 'the master data hub must not overflow at 320 dp');
+    expect(find.byTooltip('Open navigation'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Open navigation'));
+    await tester.pumpAndSettle();
+
+    final drawer = find.byType(Drawer);
+    expect(find.descendant(of: drawer, matching: find.text('Overview')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Master Data')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Students')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Sign out')),
+        findsOneWidget);
+  });
+
+  testWidgets('a desktop window gains no drawer and no hamburger',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final session = SessionController(_FakeAuthRepository());
+    session.establishSession('ADMIN');
+    await tester.pumpWidget(_MasterDataScreenWrapper(
+        session: session,
+        repository: _FakeMasterDataRepository(),
+        teacherManagementRepository: _FakeTeacherManagementRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Open navigation'), findsNothing);
+    expect(find.byType(Drawer), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

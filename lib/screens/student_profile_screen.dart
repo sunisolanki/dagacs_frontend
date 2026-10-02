@@ -5,6 +5,8 @@ import '../network/api_exception.dart';
 import '../repositories/student_profile_repository.dart';
 import '../core/theme/dagacs_theme.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// Student profile of the authenticated student (M5.1).
 ///
@@ -13,9 +15,13 @@ import '../widgets/dagacs_widgets.dart';
 /// The student may edit Father's Name, Mother's Name, and Gender.
 /// All other fields remain read-only.
 class StudentProfileScreen extends StatefulWidget {
-  const StudentProfileScreen({super.key, required this.profileRepository});
+  const StudentProfileScreen(
+      {super.key, required this.profileRepository, this.session});
 
   final StudentProfileRepository profileRepository;
+
+  /// Phase 5.4: see StudentAttendanceScreen.session.
+  final SessionController? session;
 
   @override
   State<StudentProfileScreen> createState() => _StudentProfileScreenState();
@@ -139,32 +145,42 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Profile'),
-        actions: _editing
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.check),
-                  tooltip: 'Save',
-                  onPressed: _saving ? null : _save,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.cancel),
-                  tooltip: 'Cancel',
-                  onPressed: _saving ? null : _cancel,
-                ),
-              ]
-            : [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  tooltip: 'Edit profile',
-                  onPressed: _startEditing,
-                ),
-              ],
-    ),
-    body: _buildBody(),
-  );
+    final actions = _editing
+        ? [
+            IconButton(
+              icon: const Icon(Icons.check),
+              tooltip: 'Save',
+              onPressed: _saving ? null : _save,
+            ),
+            IconButton(
+              icon: const Icon(Icons.cancel),
+              tooltip: 'Cancel',
+              onPressed: _saving ? null : _cancel,
+            ),
+          ]
+        : [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              tooltip: 'Edit profile',
+              onPressed: _startEditing,
+            ),
+          ];
+
+    // Phase 5.4: see StudentAttendanceScreen.session. With a session the screen
+    // joins the shared navigation frame; without one it is unchanged.
+    final session = widget.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Profile'), actions: actions),
+        body: _buildBody(),
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'My Profile',
+      actions: actions,
+      body: _buildBody(),
+    );
   }
 
   Widget _buildBody() {
@@ -235,21 +251,42 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     if (!editing) {
       return _buildRow(icon, label, value);
     }
-    return ListTile(
-      leading: Icon(icon, color: DagacsColors.brandPrimary),
-      title: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-      trailing: SizedBox(
-        width: 200,
-        child: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: value ?? '',
-            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+    // Phase 5.4: this used to be a `ListTile.trailing` holding a field of a
+    // fixed 200 px. With the leading icon, the label and the tile's own padding
+    // that left roughly 120 px on a 320 dp phone, which is not enough to type in
+    // and which overflowed outright on a narrow device. The field is now the
+    // tile's own content - stacked under the label - so it gets the full width
+    // at every size and needs no breakpoint at all.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          DagacsSpace.lg, DagacsSpace.sm, DagacsSpace.lg, DagacsSpace.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: DagacsColors.brandPrimary, size: 22),
+          const SizedBox(width: DagacsSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: DagacsSpace.xs),
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    hintText: value ?? '',
+                    isDense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

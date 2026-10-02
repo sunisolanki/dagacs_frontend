@@ -213,7 +213,8 @@ class DAGACSApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (_) => AttendanceSessionListScreen(
                     attendanceRepository:
-                        AppDependencies.attendanceRepository));
+                        AppDependencies.attendanceRepository,
+                    session: AppDependencies.session));
           case AppRoutes.createSession:
             final assignment = settings.arguments;
             return MaterialPageRoute(
@@ -227,7 +228,8 @@ class DAGACSApp extends StatelessWidget {
           case AppRoutes.teacherClasses:
             return MaterialPageRoute(
                 builder: (_) => TeacherClassesScreen(
-                    teacherRepository: AppDependencies.teacherRepository));
+                    teacherRepository: AppDependencies.teacherRepository,
+                    session: AppDependencies.session));
           case AppRoutes.markAttendance:
             final sessionId = settings.arguments is int
                 ? settings.arguments as int
@@ -243,14 +245,16 @@ class DAGACSApp extends StatelessWidget {
                         AppDependencies.attendanceRepository));
           case AppRoutes.studentAttendance:
             return MaterialPageRoute(
-                builder: (_) => StudentAttendanceScreen(
+builder: (_) => StudentAttendanceScreen(
                     attendanceRepository:
-                        AppDependencies.attendanceRepository));
+                        AppDependencies.attendanceRepository,
+                    session: AppDependencies.session));
            case AppRoutes.studentProfile:
              return MaterialPageRoute(
-                 builder: (_) => StudentProfileScreen(
-                     profileRepository:
-                         AppDependencies.studentProfileRepository));
+                builder: (_) => StudentProfileScreen(
+                    profileRepository:
+                        AppDependencies.studentProfileRepository,
+                    session: AppDependencies.session));
            case AppRoutes.studentChangePassword:
              return MaterialPageRoute(
                  builder: (_) => ChangePasswordScreen(
@@ -375,18 +379,21 @@ class DAGACSApp extends StatelessWidget {
             return MaterialPageRoute(
                 builder: (_) => TeacherReportsScreen(
                     reportRepository: AppDependencies.reportRepository,
-                    teacherRepository: AppDependencies.teacherRepository));
+                    teacherRepository: AppDependencies.teacherRepository,
+                    session: AppDependencies.session));
           case AppRoutes.teacherStudentWise:
             return MaterialPageRoute(
                 builder: (_) => StudentWiseReportScreen(
                     reportRepository: AppDependencies.reportRepository,
-                    teacherRepository: AppDependencies.teacherRepository));
+                    teacherRepository: AppDependencies.teacherRepository,
+                    session: AppDependencies.session));
           case AppRoutes.adminStudents:
             return MaterialPageRoute(
                 builder: (_) => StudentManagementScreen(
                     repository: AppDependencies.studentManagementRepository,
                     masterDataRepository:
-                        AppDependencies.masterDataRepository));
+                        AppDependencies.masterDataRepository,
+                    session: AppDependencies.session));
           default:
             return MaterialPageRoute(builder: (_) => const NotFoundScreen());
         }

@@ -6,14 +6,19 @@ import '../models/attendance_session.dart';
 import '../network/api_exception.dart';
 import '../repositories/attendance_repository.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// Teacher's attendance session list. Shows all sessions owned by the
 /// authenticated teacher (resolved from JWT by the backend).
 class AttendanceSessionListScreen extends StatefulWidget {
   const AttendanceSessionListScreen(
-      {super.key, required this.attendanceRepository});
+      {super.key, required this.attendanceRepository, this.session});
 
   final AttendanceRepository attendanceRepository;
+
+  /// Phase 5.5: see StudentAttendanceScreen.session.
+  final SessionController? session;
 
   @override
   State<AttendanceSessionListScreen> createState() =>
@@ -65,16 +70,28 @@ class _AttendanceSessionListScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Attendance Sessions')),
-      floatingActionButton: FloatingActionButton(
-        tooltip: 'Create session',
-        onPressed: () async {
-          await Navigator.pushNamed(context, AppRoutes.createSession);
-          _load();
-        },
-        child: const Icon(Icons.add),
-      ),
+    final fab = FloatingActionButton(
+      tooltip: 'Create session',
+      onPressed: () async {
+        await Navigator.pushNamed(context, AppRoutes.createSession);
+        _load();
+      },
+      child: const Icon(Icons.add),
+    );
+
+    // Phase 5.5: see StudentAttendanceScreen.session.
+    final session = widget.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Attendance Sessions')),
+        floatingActionButton: fab,
+        body: _buildBody(),
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'Attendance Sessions',
+      floatingActionButton: fab,
       body: _buildBody(),
     );
   }

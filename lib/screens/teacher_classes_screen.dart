@@ -7,6 +7,8 @@ import '../models/teacher_assignment.dart';
 import '../network/api_exception.dart';
 import '../repositories/teacher_repository.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// Teacher "My Classes" home tile screen (M9.4).
 ///
@@ -16,9 +18,13 @@ import '../widgets/dagacs_widgets.dart';
 /// Program, Department, Section, Batch) — the client never reconstructs
 /// context through Master Data endpoints and never issues N+1 requests.
 class TeacherClassesScreen extends StatefulWidget {
-  const TeacherClassesScreen({super.key, required this.teacherRepository});
+  const TeacherClassesScreen(
+      {super.key, required this.teacherRepository, this.session});
 
   final TeacherRepository teacherRepository;
+
+  /// Phase 5.5: see StudentAttendanceScreen.session.
+  final SessionController? session;
 
   @override
   State<TeacherClassesScreen> createState() => _TeacherClassesScreenState();
@@ -77,8 +83,17 @@ class _TeacherClassesScreenState extends State<TeacherClassesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Classes')),
+    // Phase 5.5: see StudentAttendanceScreen.session.
+    final session = widget.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('My Classes')),
+        body: _buildBody(),
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'My Classes',
       body: _buildBody(),
     );
   }

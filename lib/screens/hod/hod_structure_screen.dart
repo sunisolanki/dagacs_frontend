@@ -52,11 +52,16 @@ class HodStructureScreen extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(bottom: DagacsSpace.sm),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Icon(Icons.subdirectory_arrow_right,
                             size: 18, color: DagacsColors.textSecondary),
                         const SizedBox(width: DagacsSpace.sm),
-                        Text(level, style: DagacsTextStyles.caption),
+                        // Phase 5.8: inflexible Row child; clipped the moment
+                        // the OS font was enlarged on a narrow screen.
+                        Expanded(
+                          child: Text(level, style: DagacsTextStyles.caption),
+                        ),
                       ],
                     ),
                   ),

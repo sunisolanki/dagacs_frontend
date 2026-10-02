@@ -4,6 +4,8 @@ import '../repositories/report_repository.dart';
 import '../repositories/teacher_repository.dart';
 import '../services/report_file_downloader.dart';
 import '../widgets/student_attendance_report_view.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// Teacher Reports (M7.3) - the student-wise, date-wise attendance register.
 ///
@@ -23,21 +25,37 @@ class TeacherReportsScreen extends StatelessWidget {
     required this.reportRepository,
     required this.teacherRepository,
     this.downloadFile = downloadReportFile,
+    this.session,
   });
 
   final ReportRepository reportRepository;
   final TeacherRepository teacherRepository;
   final ReportFileDownloader downloadFile;
 
+  /// Phase 5.5: see StudentAttendanceScreen.session. Optional so existing
+  /// construction sites keep working; when supplied the screen joins the shared
+  /// navigation frame so a teacher on a phone can reach the rest of the app.
+  final SessionController? session;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Teacher Attendance Report')),
-      body: StudentAttendanceReportView(
-        reportRepository: reportRepository,
-        teacherRepository: teacherRepository,
-        downloadFile: downloadFile,
-      ),
+    final body = StudentAttendanceReportView(
+      reportRepository: reportRepository,
+      teacherRepository: teacherRepository,
+      downloadFile: downloadFile,
+    );
+
+    final session = this.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Teacher Attendance Report')),
+        body: body,
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'Teacher Attendance Report',
+      body: body,
     );
   }
 }

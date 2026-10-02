@@ -45,7 +45,7 @@ void main() {
         _host(
           HodExportBar(
             reportLabel: 'Attendance Matrix',
-            onExport: (format) async => 'DAGACS_Attendance_Matrix.xlsx',
+            onExport: (format) async => 'Saved DAGACS_Attendance_Matrix.xlsx',
           ),
         ),
       );
@@ -53,12 +53,41 @@ void main() {
       await tester.tap(find.byKey(const Key('hod-export-excel')));
       await tester.pumpAndSettle();
 
+      // Phase 5.1: the bar shows what the platform layer actually reports,
+      // verbatim. It used to discard that and always say "Downloaded <file>",
+      // which on a phone was a lie - the bytes were in app-private storage the
+      // user could not open.
       expect(
-        find.text('Downloaded DAGACS_Attendance_Matrix.xlsx'),
+        find.text('Saved DAGACS_Attendance_Matrix.xlsx'),
         findsOneWidget,
       );
       // A success is not offered as a retry.
       expect(find.byKey(const Key('hod-export-retry')), findsNothing);
+    });
+
+    testWidgets('the bar never invents a download the platform did not report', (
+      tester,
+    ) async {
+      // The strongest form of the Phase 5.1 contract: whatever the downloader
+      // says is what appears, and a word the downloader did not use - notably
+      // "Downloaded" - can never be manufactured here.
+      const status = 'Saved report.pdf in the app folder (use Share to open it)';
+      await tester.pumpWidget(
+        _host(
+          HodExportBar(
+            reportLabel: 'Attendance Matrix',
+            onExport: (format) async => status,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('hod-export-excel')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(status), findsOneWidget);
+      expect(find.textContaining('Downloaded'), findsNothing,
+          reason: 'a file in private storage was never downloaded; the control '
+              'must not claim otherwise');
     });
 
     testWidgets('generating disables both buttons and shows a spinner', (
@@ -159,7 +188,8 @@ void main() {
         reason:
             'Retry must repeat the format that failed, not default to Excel',
       );
-      expect(find.text('Downloaded low.xlsx'), findsOneWidget);
+      // Phase 5.1: the retry's own status is what is shown, verbatim.
+      expect(find.text('low.xlsx'), findsOneWidget);
     });
   });
 

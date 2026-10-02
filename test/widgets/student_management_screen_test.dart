@@ -313,14 +313,24 @@ void _bigViewport(WidgetTester tester) {
 }
 
 Widget _wrap(StudentManagementRepository repo,
-        {Future<PickedImportFile?> Function()? picker}) =>
+        {Future<PickedImportFile?> Function()? picker,
+        SessionController? session}) =>
     MaterialApp(
       home: StudentManagementScreen(
         repository: repo,
         masterDataRepository: _FakeMasterDataRepository(),
         pickImportFile: picker,
+        session: session,
       ),
     );
+
+/// Phase 5.7 helper: an authenticated admin session. The role must be explicit
+/// because the shared drawer content is derived from it.
+SessionController _adminSession() {
+  final session = SessionController(_FakeAuthRepository());
+  session.establishSession('ADMIN', email: 'admin@dagacs.test');
+  return session;
+}
 
 Future<void> _selectDropdown(
     WidgetTester tester, Key key, String label) async {
@@ -1360,5 +1370,77 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.lastImportFilename, 'students.xlsx');
     expect(repo.lastImportBytes, [1, 2, 3]);
+  });
+
+  // ---------------------------------------------------------------------
+  // Phase 5.7 - phone support.
+  // ---------------------------------------------------------------------
+
+  testWidgets('fits a 320 dp phone and exposes the shared drawer',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final session = _adminSession();
+    addTearDown(session.dispose);
+
+    final repo = _FakeStudentManagementRepository();
+    await tester.pumpWidget(_wrap(repo, session: session));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull,
+        reason: 'the search and filter area must not overflow at 320 dp');
+    expect(find.byTooltip('Open navigation'), findsOneWidget);
+
+    // The action bar and the FAB must survive the scaffold swap.
+    expect(find.byKey(const Key('import-students')), findsOneWidget);
+    expect(find.byKey(const Key('add-student')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Open navigation'));
+    await tester.pumpAndSettle();
+
+    final drawer = find.byType(Drawer);
+    expect(find.descendant(of: drawer, matching: find.text('Overview')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Master Data')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Students')),
+        findsOneWidget);
+    expect(find.descendant(of: drawer, matching: find.text('Sign out')),
+        findsOneWidget);
+  });
+
+  testWidgets('keeps its plain app bar when no session is supplied',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_wrap(_FakeStudentManagementRepository()));
+    await tester.pumpAndSettle();
+
+    // Backwards compatibility: constructing the screen without a session
+    // behaves exactly as it did before Phase 5.
+    expect(find.byTooltip('Open navigation'), findsNothing);
+    expect(find.text('Manage Students'), findsOneWidget);
+    expect(find.byKey(const Key('add-student')), findsOneWidget);
+  });
+
+  testWidgets('a desktop window gains no drawer', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final session = _adminSession();
+    addTearDown(session.dispose);
+
+    await tester.pumpWidget(
+        _wrap(_FakeStudentManagementRepository(), session: session));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Open navigation'), findsNothing);
+    expect(find.byType(Drawer), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -7,6 +7,7 @@ import '../network/api_exception.dart';
 import '../repositories/master_data_repository.dart';
 import '../repositories/teacher_management_repository.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// ADMIN-only Master Data hub (M9.5.1).
 ///
@@ -126,9 +127,17 @@ class _MasterDataScreenState extends State<MasterDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Master Data')),
-      body: widget.session.role == 'ADMIN' ? _buildAdmin() : _buildNotAdmin(),
+    final body =
+        widget.session.role == 'ADMIN' ? _buildAdmin() : _buildNotAdmin();
+
+    // Phase 5.7: with a session the screen joins the shared navigation frame so
+    // an administrator on a phone can reach the rest of the app. The session is
+    // already required here (the role gate above needs it), so this is a strict
+    // improvement with no backwards-compatibility branch.
+    return AppModuleScaffold(
+      session: widget.session,
+      title: 'Master Data',
+      body: body,
     );
   }
 

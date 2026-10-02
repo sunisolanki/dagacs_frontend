@@ -124,11 +124,18 @@ class HodContextBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.account_tree_outlined,
                     size: 18, color: DagacsColors.brandPrimary),
                 const SizedBox(width: DagacsSpace.sm),
-                Text('Academic context', style: DagacsTextStyles.cardTitle),
+                // Phase 5.8: an inflexible Row child, so this title clipped as
+                // soon as the OS font was enlarged. The controls below already
+                // reflow; the heading has to as well.
+                Expanded(
+                  child: Text('Academic context',
+                      style: DagacsTextStyles.cardTitle),
+                ),
               ],
             ),
             const SizedBox(height: DagacsSpace.sm),

@@ -81,10 +81,17 @@ class HodExportBar extends StatefulWidget {
     this.leading,
   });
 
-  /// Performs the export for [format] and returns the name of the saved file.
+  /// Performs the export for [format] and returns a truthful description of what
+  /// happened to the file.
   ///
   /// Implemented by the caller, which owns the repository and the platform
   /// downloader. Throwing surfaces as [HodExportState.failure].
+  ///
+  /// **Phase 5.1.** The returned string is shown verbatim. This used to be
+  /// ignored in favour of a hard-coded `Downloaded <fileName>`, which on a phone
+  /// was a lie: the bytes were in app-private storage the user could not open.
+  /// On the web the downloader returns `Downloaded <fileName>`, so the wording a
+  /// web user sees is unchanged.
   final Future<String> Function(HodExportFormat format) onExport;
 
   /// The human name of the report these buttons download, e.g.
@@ -165,11 +172,14 @@ class _HodExportBarState extends State<HodExportBar> {
     });
     _setBusy(true);
     try {
-      final fileName = await widget.onExport(format);
+      final status = await widget.onExport(format);
       if (!mounted) return;
       setState(() {
         _state = HodExportState.success;
-        _message = 'Downloaded $fileName';
+        // The downloader owns this sentence. Phase 5.1 stopped replacing it with
+        // a fixed "Downloaded ...", which on a phone claimed a file had been
+        // saved when it was in private storage the user could not reach.
+        _message = status;
       });
     } catch (error) {
       if (!mounted) return;

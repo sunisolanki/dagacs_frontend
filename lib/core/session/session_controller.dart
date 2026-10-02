@@ -65,13 +65,22 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Clears the JWT + session metadata and resets state (logout / 401).
+  ///
+  /// **Phase 5.2.** The in-memory reset is now guaranteed even if persistent
+  /// storage throws, because the user has just asked to sign out: leaving
+  /// [isAuthenticated] true on a storage failure is how a "logged out" user ends
+  /// up still holding a live screen. Storage itself is cleared best-effort by
+  /// [TokenService.clearSession].
   Future<void> clearSession() async {
-    await _authRepository.logout();
     _isAuthenticated = false;
     _role = 'STUDENT';
     _email = null;
     _fullName = null;
     _mustChangePassword = false;
-    notifyListeners();
+    try {
+      await _authRepository.logout();
+    } finally {
+      notifyListeners();
+    }
   }
 }

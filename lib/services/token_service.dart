@@ -69,11 +69,46 @@ class TokenService {
     return prefs.getString(_fullNameKey);
   }
 
+  /// Removes every trace of the session.
+  ///
+  /// **Phase 5.2.** This previously left [\_mustChangePasswordKey] behind while
+  /// removing everything else, so a "clear the session" that did not clear the
+  /// session was possible. Each removal is independent: a failure on one key
+  /// must not leave the JWT in place, because a lingering token is the one
+  /// outcome that keeps a signed-out user signed in.
   static Future<void> clearSession() async {
-    await _secureStorage.delete(key: _tokenKey);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_roleKey);
-    await prefs.remove(_emailKey);
-    await prefs.remove(_fullNameKey);
+    await _ignoreFailure(() => _secureStorage.delete(key: _tokenKey));
+    final prefs = await _prefsOrNull();
+    if (prefs == null) return;
+    for (final key in [
+      _roleKey,
+      _emailKey,
+      _fullNameKey,
+      _mustChangePasswordKey,
+    ]) {
+      await _ignoreFailure(() => prefs.remove(key));
+    }
+  }
+
+  /// SharedPreferences access that degrades instead of throwing.
+  ///
+  /// Storage can be unavailable (a platform channel not registered, a corrupt
+  /// store). A session clear must still finish rather than leave a half-signed-in
+  /// state behind.
+  static Future<SharedPreferences?> _prefsOrNull() async {
+    try {
+      return await SharedPreferences.getInstance();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _ignoreFailure(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      // Best effort. The caller is clearing state, and failing loudly here would
+      // strand the user in a worse state than the one being cleaned up.
+    }
   }
 }

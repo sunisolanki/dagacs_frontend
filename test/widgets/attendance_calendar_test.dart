@@ -216,7 +216,12 @@ void main() {
 
       // Regression guard: this used to be "2026-9-15", which never matched a
       // backend `AttendanceRecord.date` of "2026-09-15".
-      expect(selected, ['${now.year}-09-15']);
+      //
+      // The month is derived from the calendar's own displayed month rather
+      // than hardcoded. Hardcoding it meant the assertion silently started
+      // testing September while the widget rendered whatever `DateTime.now()`
+      // said - so the test passed in September and failed in every other month.
+      expect(selected, [_dayKey(DateTime(now.year, now.month, 15))]);
       expect(selected.single, matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')));
     });
 
@@ -250,8 +255,14 @@ void main() {
 
     testWidgets('a tapped day matches an AttendanceRecord with the same '
         'ISO date', (tester) async {
-      // The record key a real backend response would carry.
-      const recordDate = '2026-09-15';
+      // The record key a real backend response would carry. Derived from the same
+      // probe date as the summary below, so the fixture and the assertion cannot
+      // drift apart - previously the record was pinned to a literal
+      // '2026-09-15' while the summary used the current month, so the "matching
+      // record" property only held during September.
+      final now = DateTime.now();
+      final probe = DateTime(now.year, now.month, 15);
+      final recordDate = _dayKey(probe);
       final record = AttendanceRecord(
           id: 1,
           subjectId: 5,
@@ -260,8 +271,6 @@ void main() {
           date: recordDate,
           lecturePeriod: '1st');
 
-      final now = DateTime.now();
-      final probe = DateTime(now.year, now.month, 15);
       final selected = <String>[];
       await tester.pumpWidget(
         _calendar(

@@ -4,6 +4,8 @@ import '../repositories/report_repository.dart';
 import '../repositories/teacher_repository.dart';
 import '../services/report_file_downloader.dart';
 import '../widgets/student_attendance_report_view.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// Deep link to the student-wise attendance register.
 ///
@@ -17,21 +19,35 @@ class StudentWiseReportScreen extends StatelessWidget {
     required this.reportRepository,
     required this.teacherRepository,
     this.downloadFile = downloadReportFile,
+    this.session,
   });
 
   final ReportRepository reportRepository;
   final TeacherRepository teacherRepository;
   final ReportFileDownloader downloadFile;
 
+  /// Phase 5.4: see StudentAttendanceScreen.session.
+  final SessionController? session;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Student-Wise Register')),
-      body: StudentAttendanceReportView(
-        reportRepository: reportRepository,
-        teacherRepository: teacherRepository,
-        downloadFile: downloadFile,
-      ),
+    final body = StudentAttendanceReportView(
+      reportRepository: reportRepository,
+      teacherRepository: teacherRepository,
+      downloadFile: downloadFile,
+    );
+
+    final session = this.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Student-Wise Register')),
+        body: body,
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'Student-Wise Register',
+      body: body,
     );
   }
 }

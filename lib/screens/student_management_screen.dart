@@ -16,6 +16,8 @@ import '../repositories/master_data_repository.dart';
 import '../repositories/student_management_repository.dart';
 import '../services/report_file_downloader.dart';
 import '../widgets/dagacs_widgets.dart';
+import '../core/session/session_controller.dart';
+import '../widgets/app_module_scaffold.dart';
 
 /// A file the admin selected for bulk import (name + in-memory bytes).
 ///
@@ -41,6 +43,7 @@ class StudentManagementScreen extends StatefulWidget {
     required this.repository,
     required this.masterDataRepository,
     this.pickImportFile,
+    this.session,
   });
 
   final StudentManagementRepository repository;
@@ -49,6 +52,10 @@ class StudentManagementScreen extends StatefulWidget {
   /// M9.10 import file picker; defaults to the real file_picker-backed flow.
   /// Injectable so widget tests can drive import deterministically.
   final Future<PickedImportFile?> Function()? pickImportFile;
+
+  /// Phase 5.7: see StudentAttendanceScreen.session. Optional; when supplied the
+  /// screen joins the shared navigation frame.
+  final SessionController? session;
 
   @override
   State<StudentManagementScreen> createState() => _StudentManagementScreenState();
@@ -520,24 +527,40 @@ class _StudentManagementScreenState extends State<StudentManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Students'),
-        actions: [
-          IconButton(
-            key: const Key('import-students'),
-            tooltip: 'Import students from Excel or CSV',
-            icon: const Icon(Icons.upload_file_outlined),
-            onPressed: _openImport,
-          ),
-        ],
+    final actions = [
+      IconButton(
+        key: const Key('import-students'),
+        tooltip: 'Import students from Excel or CSV',
+        icon: const Icon(Icons.upload_file_outlined),
+        onPressed: _openImport,
       ),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('add-student'),
-        tooltip: 'Add student',
-        onPressed: _openCreate,
-        child: const Icon(Icons.person_add),
-      ),
+    ];
+    final fab = FloatingActionButton(
+      key: const Key('add-student'),
+      tooltip: 'Add student',
+      onPressed: _openCreate,
+      child: const Icon(Icons.person_add),
+    );
+
+    // Phase 5.7: see MasterDataScreen. Optional so the existing construction
+    // sites keep working; when supplied the screen joins the shared navigation
+    // frame so an administrator on a phone is not trapped on this page.
+    final session = widget.session;
+    if (session == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Manage Students'),
+          actions: actions,
+        ),
+        floatingActionButton: fab,
+        body: _buildBody(),
+      );
+    }
+    return AppModuleScaffold(
+      session: session,
+      title: 'Manage Students',
+      actions: actions,
+      floatingActionButton: fab,
       body: _buildBody(),
     );
   }

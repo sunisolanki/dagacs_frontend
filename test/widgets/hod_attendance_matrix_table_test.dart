@@ -160,6 +160,34 @@ void main() {
     expect(find.text('CS2025001'), findsOneWidget);
   });
 
+  testWidgets('the matrix is usable at a 320 dp phone width', (tester) async {
+    // Phase 5.6: the previous narrow case was 420 dp, which is a large phone in
+    // landscape-ish thinking but not the floor. A 320 dp screen is the real
+    // narrowest target, and the matrix is the widest surface in the app.
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(wrap(columns: columns, rows: rows));
+    await tester.pumpAndSettle();
+
+    // It must scroll, not overflow.
+    expect(tester.takeException(), isNull,
+        reason: 'a wide matrix must scroll rather than overflow at 320 dp');
+    expect(find.byKey(const Key('hod-matrix-scroll-horizontal')),
+        findsOneWidget);
+
+    // The identity column survives, so a HOD can still tell rows apart.
+    expect(find.text('CS2025001'), findsOneWidget);
+
+    // And the last subject column is reachable by scrolling right.
+    final scrollable = find
+        .byKey(const Key('hod-matrix-scroll-horizontal'));
+    await tester.drag(scrollable, const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('tapping a sortable header reports the column, tapping again flips',
       (tester) async {
     // A wide surface so the last column is not off-screen.

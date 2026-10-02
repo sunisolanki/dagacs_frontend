@@ -185,12 +185,17 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Icon(Icons.calendar_today, color: Colors.blue),
                     const SizedBox(width: 8),
-                    Text(
-                      'Attendance Calendar',
-                      style: Theme.of(context).textTheme.titleMedium,
+                    // Phase 5.4: the title used to be an inflexible child of a
+                    // Row, so anything wider than the leftover space overflowed.
+                    Expanded(
+                      child: Text(
+                        'Attendance Calendar',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
                   ],
                 ),
@@ -233,20 +238,30 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   }
 
   Widget _buildMonthNavigation() {
+    // Phase 5.4: the month label used to be an inflexible Row child laid out
+    // with spaceBetween. Two 48 dp arrow buttons, a month name and the "Today"
+    // button together exceed a 320 dp phone, so the label is now the flexible
+    // member and truncates instead of pushing the row past the card edge.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         IconButton(
           icon: const Icon(Icons.chevron_left),
+          tooltip: 'Previous month',
           onPressed: _previousMonth,
         ),
-        Text(
-          _getMonthYearString(),
-          style: Theme.of(context).textTheme.titleSmall,
+        Expanded(
+          child: Center(
+            child: Text(
+              _getMonthYearString(),
+              style: Theme.of(context).textTheme.titleSmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
         TextButton(onPressed: _today, child: const Text('Today')),
         IconButton(
           icon: const Icon(Icons.chevron_right),
+          tooltip: 'Next month',
           onPressed: _nextMonth,
         ),
       ],

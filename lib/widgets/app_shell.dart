@@ -7,7 +7,7 @@ import 'dagacs_widgets.dart';
 
 /// True when [current] is [destination] or a sub-route of it, so module
 /// detail pages keep their parent navigation item highlighted.
-bool _isSameOrChildRoute(String current, String destination) {
+bool isSameOrChildRoute(String current, String destination) {
   if (current == destination) return true;
   if (destination.length <= 1) return false;
   return current.startsWith('$destination/');
@@ -38,6 +38,82 @@ class AppShellScope extends InheritedWidget {
       oldWidget.sideNavVisible != sideNavVisible;
 }
 
+/// One entry in the role's navigation vocabulary.
+///
+/// **Phase 5.3** promoted the shell's private list to a shared one so a module
+/// screen's drawer shows exactly the destinations the home shell does, instead
+/// of a second list that could drift.
+class AppDestination {
+  const AppDestination(this.icon, this.label, this.route);
+
+  final IconData icon;
+  final String label;
+  final String route;
+}
+
+/// The navigation destinations available to [role].
+///
+/// The single source of truth for "where can this role go", shared by [AppShell]
+/// and by every module screen's mobile drawer.
+List<AppDestination> appDestinationsFor(String role) {
+  switch (role) {
+    case 'ADMIN':
+      return const [
+        AppDestination(
+            Icons.dashboard_outlined, 'Overview', AppRoutes.home),
+        AppDestination(
+            Icons.account_tree_outlined, 'Master Data', AppRoutes.masterData),
+        AppDestination(
+            Icons.people_outline, 'Students', AppRoutes.adminStudents),
+      ];
+    case 'HOD':
+      return const [
+        AppDestination(
+            Icons.dashboard_outlined, 'Overview', AppRoutes.hodDashboard),
+        AppDestination(
+            Icons.account_tree_outlined, 'Structure', AppRoutes.hodStructure),
+        AppDestination(
+            Icons.meeting_room_outlined, 'Sections', AppRoutes.hodSections),
+        AppDestination(Icons.book_outlined, 'Subjects', AppRoutes.hodSubjects),
+        AppDestination(Icons.people_outline, 'Students', AppRoutes.hodStudents),
+        AppDestination(
+            Icons.warning_amber_outlined, 'Low Attendance',
+            AppRoutes.hodLowAttendance),
+        AppDestination(
+            Icons.timeline_outlined, 'Rollups', AppRoutes.hodRollups),
+        AppDestination(Icons.table_chart_outlined, 'Attendance Matrix',
+            AppRoutes.hodAttendanceMatrix),
+        AppDestination(
+            Icons.assessment_outlined, 'Reports', AppRoutes.hodReports),
+        AppDestination(Icons.history, 'Audit Logs', AppRoutes.hodAuditLogs),
+        AppDestination(
+            Icons.fact_check_outlined, 'My Classes',
+            AppRoutes.teacherClasses),
+      ];
+    case 'TEACHER':
+      return const [
+        AppDestination(
+            Icons.dashboard_outlined, 'Overview', AppRoutes.home),
+        AppDestination(
+            Icons.fact_check_outlined, 'Attendance',
+            AppRoutes.teacherAttendance),
+        AppDestination(
+            Icons.assignment_outlined, 'Reports', AppRoutes.teacherReports),
+      ];
+    case 'STUDENT':
+    default:
+      return const [
+        AppDestination(
+            Icons.dashboard_outlined, 'Overview', AppRoutes.home),
+        AppDestination(
+            Icons.how_to_reg_outlined, 'My Attendance',
+            AppRoutes.studentAttendance),
+        AppDestination(
+            Icons.person_outline, 'My Profile', AppRoutes.studentProfile),
+      ];
+  }
+}
+
 /// The authenticated, role-aware application frame used by the home
 /// dashboard. It centralizes the navigation vocabulary and deliberately only
 /// lists routes supported by the current backend for the signed-in role.
@@ -51,64 +127,7 @@ class AppShell extends StatelessWidget {
   final SessionController session;
   final Widget body;
 
-  List<_AppDestination> get _destinations {
-    switch (session.role) {
-      case 'ADMIN':
-        return const [
-          _AppDestination(
-              Icons.dashboard_outlined, 'Overview', AppRoutes.home),
-          _AppDestination(
-              Icons.account_tree_outlined, 'Master Data', AppRoutes.masterData),
-          _AppDestination(
-              Icons.people_outline, 'Students', AppRoutes.adminStudents),
-        ];
-      case 'HOD':
-        return const [
-          _AppDestination(
-              Icons.dashboard_outlined, 'Overview', AppRoutes.hodDashboard),
-          _AppDestination(
-              Icons.account_tree_outlined, 'Structure', AppRoutes.hodStructure),
-          _AppDestination(
-              Icons.meeting_room_outlined, 'Sections', AppRoutes.hodSections),
-          _AppDestination(Icons.book_outlined, 'Subjects', AppRoutes.hodSubjects),
-          _AppDestination(Icons.people_outline, 'Students', AppRoutes.hodStudents),
-          _AppDestination(
-              Icons.warning_amber_outlined, 'Low Attendance',
-              AppRoutes.hodLowAttendance),
-          _AppDestination(
-              Icons.timeline_outlined, 'Rollups', AppRoutes.hodRollups),
-          _AppDestination(Icons.table_chart_outlined, 'Attendance Matrix',
-              AppRoutes.hodAttendanceMatrix),
-          _AppDestination(
-              Icons.assessment_outlined, 'Reports', AppRoutes.hodReports),
-          _AppDestination(Icons.history, 'Audit Logs', AppRoutes.hodAuditLogs),
-          _AppDestination(
-              Icons.fact_check_outlined, 'My Classes',
-              AppRoutes.teacherClasses),
-        ];
-      case 'TEACHER':
-        return const [
-          _AppDestination(
-              Icons.dashboard_outlined, 'Overview', AppRoutes.home),
-          _AppDestination(
-              Icons.fact_check_outlined, 'Attendance',
-              AppRoutes.teacherAttendance),
-          _AppDestination(
-              Icons.assignment_outlined, 'Reports', AppRoutes.teacherReports),
-        ];
-      case 'STUDENT':
-      default:
-        return const [
-          _AppDestination(
-              Icons.dashboard_outlined, 'Overview', AppRoutes.home),
-          _AppDestination(
-              Icons.how_to_reg_outlined, 'My Attendance',
-              AppRoutes.studentAttendance),
-          _AppDestination(
-              Icons.person_outline, 'My Profile', AppRoutes.studentProfile),
-        ];
-    }
-  }
+  List<AppDestination> get _destinations => appDestinationsFor(session.role);
 
   Future<void> _logout(BuildContext context) async {
     await session.clearSession();
@@ -119,7 +138,7 @@ class AppShell extends StatelessWidget {
 
   void _navigate(BuildContext context, String route) {
     final current = ModalRoute.of(context)?.settings.name;
-    if (current != null && _isSameOrChildRoute(current, route)) return;
+    if (current != null && isSameOrChildRoute(current, route)) return;
     Navigator.of(context).pushNamed(route);
   }
 
@@ -161,19 +180,25 @@ class AppShell extends StatelessWidget {
               const SizedBox(width: DagacsSpace.xs),
             ],
           ),
-          drawer: desktop ? null : Drawer(
-            child: SafeArea(
-              child: _NavContent(
-                session: session,
-                destinations: destinations,
-                onNavigate: (route) {
-                  Navigator.of(context).pop();
-                  _navigate(context, route);
-                },
-                onLogout: () => _logout(context),
-              ),
-            ),
-          ),
+          drawer: desktop
+              ? null
+              : Drawer(
+                  // Phase 5.8: without this a screen reader announces the panel
+                  // only as an unnamed container, so the main way to navigate
+                  // on a phone has no accessible name.
+                  semanticLabel: 'Navigation menu',
+                  child: SafeArea(
+                    child: AppNavContent(
+                      session: session,
+                      destinations: destinations,
+                      onNavigate: (route) {
+                        Navigator.of(context).pop();
+                        _navigate(context, route);
+                      },
+                      onLogout: () => _logout(context),
+                    ),
+                  ),
+                ),
           body: desktop
               ? Row(
                   children: [
@@ -181,7 +206,7 @@ class AppShell extends StatelessWidget {
                       width: 244,
                       child: Material(
                         color: DagacsColors.surface,
-                        child: _NavContent(
+                        child: AppNavContent(
                           session: session,
                           destinations: destinations,
                           onNavigate: (route) => _navigate(context, route),
@@ -220,8 +245,8 @@ class _BrandTitle extends StatelessWidget {
       );
 }
 
-class _NavContent extends StatelessWidget {
-  const _NavContent({
+class AppNavContent extends StatelessWidget {
+  const AppNavContent({
     required this.session,
     required this.destinations,
     required this.onNavigate,
@@ -229,7 +254,7 @@ class _NavContent extends StatelessWidget {
   });
 
   final SessionController session;
-  final List<_AppDestination> destinations;
+  final List<AppDestination> destinations;
   final ValueChanged<String> onNavigate;
   final VoidCallback onLogout;
 
@@ -275,7 +300,7 @@ class _NavContent extends StatelessWidget {
                         horizontal: DagacsSpace.sm, vertical: 2),
                     child: ListTile(
                       selected: currentRoute != null &&
-                          _isSameOrChildRoute(currentRoute, destination.route),
+                          isSameOrChildRoute(currentRoute, destination.route),
                       selectedTileColor: DagacsColors.brandSoft,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(DagacsRadius.md)),
@@ -301,10 +326,3 @@ class _NavContent extends StatelessWidget {
   }
 }
 
-class _AppDestination {
-  const _AppDestination(this.icon, this.label, this.route);
-
-  final IconData icon;
-  final String label;
-  final String route;
-}
