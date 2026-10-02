@@ -872,16 +872,45 @@ Widget _buildContextPackButton(String? blocked) {
 
   return Padding(
     padding: const EdgeInsets.only(top: DagacsSpace.xs),
-    child: _ContextPackButton(
-      blockedReason: contextComplete ? null : packBlockedReason,
-      busy: _exportBusy,
-      onPressed: () => _exportContextPack(),
+    child: Row(
+      children: [
+        Expanded(
+          child: _ContextPackButton(
+            buttonKey: const Key('hod-export-pack'),
+            format: 'xlsx',
+            blockedReason: contextComplete ? null : packBlockedReason,
+            busy: _exportBusy,
+            onPressed: () => _exportContextPack('xlsx'),
+          ),
+        ),
+        const SizedBox(width: DagacsSpace.sm),
+        // Phase 4C.3: the same five reports as one PDF. A second control beside
+        // the first rather than a third format inside HodExportBar, for the same
+        // reason the bar was left alone in 4B: the bar is frozen at exactly the
+        // two formats of the selected report, and the Pack is a separate
+        // deliverable, not a third format of it. Both buttons share one disabled
+        // reason and one busy flag, so neither can be offered where the other
+        // would be refused.
+        Expanded(
+          child: _ContextPackButton(
+            buttonKey: const Key('hod-export-pack-pdf'),
+            format: 'pdf',
+            blockedReason: contextComplete ? null : packBlockedReason,
+            busy: _exportBusy,
+            onPressed: () => _exportContextPack('pdf'),
+          ),
+        ),
+      ],
     ),
   );
 }
 
-/// Generates the Context Pack for the loaded snapshot.
-Future<void> _exportContextPack() async {
+/// Generates the Context Pack for the loaded snapshot, in the requested format.
+///
+/// Phase 4C.3: [format] is the path segment the backend already serves, so the
+/// one repository method covers both files and the two are guaranteed to be the
+/// same five reports of the same authorized context.
+Future<void> _exportContextPack(String format) async {
   if (_exporting) return;
   final repository = widget.attendanceRepository;
   final ctx = _loadedContext;
@@ -899,7 +928,7 @@ Future<void> _exportContextPack() async {
   });
   try {
     final payload = await repository.exportContextPack(
-      'xlsx',
+      format,
       academicSessionId: ctx.academicSessionId,
       programId: ctx.programId,
       semesterId: ctx.semesterId,
@@ -1123,31 +1152,66 @@ class _Preview {
 }
 
 /// Phase 4B: the Context Pack control.
+/// Phase 4C.3: one control per format - the same five reports as a workbook or as
+/// a single PDF.
 ///
 /// <b>Separate from [HodExportBar] on purpose.</b> The bar is the per-report
 /// control Phase 4A froze, and it offers exactly the two formats of the selected
 /// report. The Pack is not a third format of that report - it is a separate
-/// workbook bundling several of them - so it gets its own control rather than
+/// deliverable bundling several of them - so it gets its own controls rather than
 /// being forced into the bar, which would have weakened the guarantee that a
 /// control never advertises a file it does not produce.
 ///
-/// It reuses the same disabled/lock contract as the bar: disabled with an
-/// explanatory reason until the report has loaded for a full context, and inert
-/// while a generation is in flight so a double tap cannot start two exports.
+/// <b>Two buttons, not a menu.</b> The alternative was one button that opens a
+/// format choice, which would have meant replacing the single control Phase 4B
+/// shipped and every key its tests use. Two side-by-side buttons mirror the
+/// Excel/PDF pair the per-report bar already uses, so the pattern a HOD learns in
+/// one place is the pattern in both.
+///
+/// <b>Both controls share one disabled reason and one busy flag</b>, inherited
+/// from the caller, so neither can be offered where the other would be refused, and
+/// neither stays live while a generation is in flight.
 class _ContextPackButton extends StatelessWidget {
   const _ContextPackButton({
+    required this.buttonKey,
+    required this.format,
     required this.blockedReason,
     required this.busy,
     required this.onPressed,
   });
 
+  /// Identifies this control's button, so a test can tell the two formats apart.
+  final Key buttonKey;
+
+  /// `xlsx` or `pdf` - the path segment the backend serves, and the label suffix.
+  final String format;
+
   final String? blockedReason;
   final bool busy;
   final VoidCallback onPressed;
 
+  bool get _isPdf => format == 'pdf';
+
+  /// The resting label.
+  ///
+  /// The spreadsheet control keeps the exact wording Phase 4B shipped, so the
+  /// existing hub and pack tests that look for the text 'Context Pack' keep
+  /// meaning what they meant.
+  String get _label => _isPdf ? 'Context Pack PDF' : 'Context Pack';
+
+  /// Per-format, so the two buttons never share a widget key.
+  Key get _labelKey => _isPdf
+      ? const Key('hod-export-pack-pdf-label')
+      : const Key('hod-export-pack-label');
+
+  /// The tooltip states exactly what is in the file, so a HOD knows what they are
+  /// about to download before spending the wait on it.
   String get _tooltip => blockedReason ??
-      'Download one workbook with ${contextPackSheets.join(', ')} '
-          'for the selected academic context';
+      (_isPdf
+          ? 'One PDF with ${contextPackSheets.join(', ')} for the selected '
+              'academic context'
+          : 'One workbook with ${contextPackSheets.join(', ')} '
+              'for the selected academic context');
 
   @override
   Widget build(BuildContext context) {
@@ -1159,7 +1223,7 @@ class _ContextPackButton extends StatelessWidget {
       child: Tooltip(
         message: _tooltip,
         child: OutlinedButton.icon(
-          key: const Key('hod-export-pack'),
+          key: buttonKey,
           onPressed: disabled ? null : onPressed,
           icon: busy
               ? const SizedBox(
@@ -1167,10 +1231,11 @@ class _ContextPackButton extends StatelessWidget {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.folder_zip_outlined),
+              : Icon(_isPdf ? Icons.picture_as_pdf : Icons.folder_zip_outlined),
           label: Text(
-            busy ? 'Building $contextPackLabel…' : 'Context Pack',
-            key: const Key('hod-export-pack-label'),
+            busy ? 'Building $contextPackLabel…' : _label,
+            key: _labelKey,
+            textAlign: TextAlign.center,
           ),
         ),
       ),
